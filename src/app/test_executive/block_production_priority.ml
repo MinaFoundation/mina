@@ -2,18 +2,10 @@ open Core
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "block-prod-prio"
 
@@ -112,7 +104,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let window_ms =
       (Network.constraint_constants network).block_window_duration_ms
     in
-    let%bind () = Wait_for.all_nodes_to_initialize network t in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
     let%bind () =
       section_hard "wait for 3 blocks to be produced (warm-up)"
         (Wait_for.blocks_to_be_produced t 3)
@@ -222,7 +214,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
        [%log info]
          "Observer %s started again, will now wait for this node to initialize"
          (Network.Node.id observer) ;
-       let%bind () = Wait_for.node_to_initialize t observer in
+       let%bind () = Wait_for.nodes_to_initialize t [ observer ] in
        Wait_for.with_timeouts t
          ~condition:(Wait_condition.nodes_to_synchronize [ receiver; observer ])
          ~soft_timeout:(Network_time_span.Slots 3)

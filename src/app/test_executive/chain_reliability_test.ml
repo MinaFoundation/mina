@@ -2,18 +2,10 @@ open Core
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "chain-reliability"
 
@@ -38,7 +30,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let open Malleable_error.Let_syntax in
     let logger = Logger.create ~prefix:(test_name ^ "test: ") () in
     let all_nodes = Network.all_nodes network in
-    let%bind () = Wait_for.all_nodes_to_initialize network t in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
     let node_a = get_bp_node network "node-a" in
     let node_b = get_bp_node network "node-b" in
     let node_c = get_bp_node network "node-c" in
@@ -55,7 +47,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          [%log info]
            "%s started again, will now wait for this node to initialize"
            (Node.id node_c) ;
-         let%bind () = Wait_for.node_to_initialize t node_c in
+         let%bind () = Wait_for.nodes_to_initialize t [ node_c ] in
          Wait_for.with_timeouts t
            ~condition:
              (Wait_condition.nodes_to_synchronize [ node_a; node_b; node_c ])

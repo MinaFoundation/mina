@@ -2,18 +2,10 @@ open Core
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "gossip-consis"
 
@@ -35,7 +27,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let open Malleable_error.Let_syntax in
     let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     [%log info] "starting..." ;
-    let%bind () = Wait_for.all_nodes_to_initialize network t in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
     [%log info] "done waiting for initializations" ;
     let receiver_bp = get_bp_node network "node-a" in
     let%bind receiver_pub_key = pub_key_of_node receiver_bp in

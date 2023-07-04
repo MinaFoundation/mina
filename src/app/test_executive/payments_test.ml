@@ -4,18 +4,10 @@ open Integration_test_lib
 open Mina_base
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "payments"
 
@@ -83,17 +75,9 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let open Network in
     let open Malleable_error.Let_syntax in
     let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
-    let%bind () = Wait_for.all_nodes_to_initialize network t in
-    let untimed_node_a =
-      Core.String.Map.find_exn
-        (Network.block_producers network)
-        "untimed-node-a"
-    in
-    let untimed_node_b =
-      Core.String.Map.find_exn
-        (Network.block_producers network)
-        "untimed-node-b"
-    in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
+    let untimed_node_a = get_bp_node network "untimed-node-a" in
+    let untimed_node_b = get_bp_node network "untimed-node-b" in
     let timed_node_c = get_bp_node network "timed-node-c" in
     let fish1 = get_genesis_keypair network "fish1" in
     let fish2 = get_genesis_keypair network "fish2" in
@@ -102,9 +86,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          ~f:(fun { Signature_lib.Keypair.public_key; _ } ->
            public_key |> Signature_lib.Public_key.to_bigstring
            |> Bigstring.to_string ) ) ;
-    let snark_coordinator =
-      Core.String.Map.find_exn (Network.all_nodes network) "snark-node"
-    in
+    let snark_coordinator = get_node network "snark-node" in
     let snark_node_key1 = get_genesis_keypair network "snark-node-key1" in
     let snark_node_key2 = get_genesis_keypair network "snark-node-key2" in
     [%log info] "snark node keypairs: %s"
@@ -115,7 +97,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     (* create a signed txn which we'll use to make a successfull txn, and then a replay attack *)
     let amount = Currency.Amount.of_mina_string_exn "10" in
     let fee = Currency.Fee.of_mina_string_exn "1" in
-    let test_constants = Engine.Network.constraint_constants network in
+    let test_constants = Network.constraint_constants network in
     let receiver_pub_key =
       fish1.keypair.public_key |> Signature_lib.Public_key.compress
     in
@@ -189,9 +171,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              ~raw_signature:
                (Mina_base.Signature.Raw.encode signed_cmmd.signature)
          in
-         wait_for t
-           (Wait_condition.signed_command_to_be_included_in_frontier
-              ~txn_hash:hash ~node_included_in:(`Node untimed_node_b) ) )
+         Wait_for.signed_command_to_be_included_in_frontier t ~txn_hash:hash
+           ~node_included_in:(`Node untimed_node_b) )
     in
     let%bind () =
       section
@@ -383,9 +364,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
            Network.Node.must_send_payment ~logger timed_node_c ~sender_pub_key
              ~receiver_pub_key ~amount ~fee
          in
-         wait_for t
-           (Wait_condition.signed_command_to_be_included_in_frontier
-              ~txn_hash:hash ~node_included_in:(`Node timed_node_c) ) )
+         Wait_for.signed_command_to_be_included_in_frontier t ~txn_hash:hash
+           ~node_included_in:(`Node timed_node_c) )
     in
     let%bind () =
       section "unable to send payment from timed account using illiquid tokens"
@@ -459,9 +439,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
            send_payments ~logger ~sender_pub_key ~receiver_pub_key
              ~amount:Currency.Amount.one ~fee ~node:sender 10
          in
-         wait_for t
-           (Wait_condition.ledger_proofs_emitted_since_genesis
-              ~test_config:config ~num_proofs:1 ) )
+         Wait_for.ledger_proofs_emitted_since_genesis t ~test_config:config
+           ~num_proofs:1 )
     in
     let%bind () =
       section_hard
@@ -539,9 +518,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
            send_payments ~logger ~sender_pub_key ~receiver_pub_key
              ~amount:Currency.Amount.one ~fee ~node:sender 12
          in
-         wait_for t
-           (Wait_condition.ledger_proofs_emitted_since_genesis ~num_proofs:2
-              ~test_config:config ) )
+         Wait_for.ledger_proofs_emitted_since_genesis t ~num_proofs:2
+           ~test_config:config )
     in
     let%bind () =
       section_hard

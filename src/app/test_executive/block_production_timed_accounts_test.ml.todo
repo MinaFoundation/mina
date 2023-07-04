@@ -1,16 +1,12 @@
 open Integration_test_lib
 open Core_kernel
 
-module Make (Engine : Intf.Engine.S) (Dsl : Intf.Dsl.S with module Engine := Engine)  = struct
-  open Engine
-  open Dsl
+module Make (Inputs : Intf.Test.Inputs_intf)  = struct
+  open Inputs.Dsl
+  open Inputs.Engine
+  open Test_common.Make (Inputs)
 
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "block_prod_timed"
 
   let block_producer_balance = "1000"
 

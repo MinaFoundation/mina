@@ -2,18 +2,10 @@ open Core_kernel
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "delegation"
 
@@ -37,7 +29,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let logger = Logger.create ~prefix:(test_name ^ "test: ") () in
     (* fee for user commands *)
     let fee = Currency.Fee.of_nanomina_int_exn 10_000_000 in
-    let%bind () = Wait_for.all_nodes_to_initialize network t in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
     let node_a = get_bp_node network "node-a" in
     let node_b = get_bp_node network "node-b" in
     let%bind () =
@@ -55,9 +47,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              ~sender_pub_key:delegation_sender_pub_key
              ~receiver_pub_key:delegation_receiver_pub_key ~fee
          in
-         wait_for t
-           (Wait_condition.signed_command_to_be_included_in_frontier
-              ~txn_hash:hash ~node_included_in:`Any_node ) )
+         Wait_for.signed_command_to_be_included_in_frontier t ~txn_hash:hash
+           ~node_included_in:`Any_node )
     in
     section_hard "Running replayer"
       (let%bind logs =

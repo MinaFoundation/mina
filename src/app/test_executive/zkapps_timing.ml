@@ -3,17 +3,10 @@ open Async
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "zkapps-timing"
 
@@ -46,11 +39,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let run network t =
     let open Malleable_error.Let_syntax in
     let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
-    let all_nodes = Network.all_nodes network in
-    let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
     let block_producer_nodes =
       Network.block_producers network |> Core.String.Map.data
     in
@@ -358,23 +347,16 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       Transaction_snark.For_tests.update_states ~constraint_constants
         zkapp_command_spec
     in
-    let with_timeout =
-      let soft_slots = 3 in
-      let soft_timeout = Network_time_span.Slots soft_slots in
-      let hard_timeout = Network_time_span.Slots (soft_slots * 2) in
-      Wait_condition.with_timeouts ~soft_timeout ~hard_timeout
-    in
     let wait_for_zkapp ~has_failures zkapp_command =
       let%map () =
-        wait_for t @@ with_timeout
-        @@ Wait_condition.zkapp_to_be_included_in_frontier ~has_failures
-             ~zkapp_command
+        Wait_for.zkapp_to_be_included_in_frontier t ~has_failures ~zkapp_command
+          ~soft_slots:3
       in
       [%log info] "zkApp transaction included in transition frontier"
     in
     let%bind () =
       section "Send a zkApp to create a zkApp account with timing"
-        (send_zkapp ~logger node zkapp_command_create_account_with_timing)
+        (Zkapp.send ~logger node zkapp_command_create_account_with_timing)
     in
     let%bind () =
       section
@@ -385,7 +367,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send zkApp to create a 2nd zkApp account with timing"
-        (send_zkapp ~logger node zkapp_command_create_second_account_with_timing)
+        (Zkapp.send ~logger node zkapp_command_create_second_account_with_timing)
     in
     let%bind () =
       section
@@ -396,7 +378,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send zkApp to create a 3rd zkApp account with timing"
-        (send_zkapp ~logger node zkapp_command_create_third_account_with_timing)
+        (Zkapp.send ~logger node zkapp_command_create_third_account_with_timing)
     in
     let%bind () =
       section
@@ -408,9 +390,11 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let%bind () =
       section "Verify zkApp timing in ledger"
         (let%bind ledger_update =
-           get_account_update ~logger node timing_account_id
+           Zkapp.get_account_update ~logger node timing_account_id
          in
-         if compatible_updates ~ledger_update ~requested_update:timing_update
+         if
+           Zkapp.compatible_updates ~ledger_update
+             ~requested_update:timing_update
          then (
            [%log info]
              "Ledger timing and requested timing update are compatible" ;
@@ -437,7 +421,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send invalid zkApp with zero vesting period in timing"
-        (send_invalid_zkapp ~logger node zkapp_command_with_zero_vesting_period
+        (Zkapp.send_invalid ~logger node zkapp_command_with_zero_vesting_period
            "Zero vesting period" )
     in
     (* let%bind before_balance =
@@ -445,7 +429,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
        in *)
     let%bind () =
       section "Send a zkApp with transfer from timed account that succeeds"
-        (send_zkapp ~logger node zkapp_command_transfer_from_timed_account)
+        (Zkapp.send ~logger node zkapp_command_transfer_from_timed_account)
     in
     let%bind () =
       section "Waiting for zkApp with transfer from timed account that succeeds"
@@ -566,7 +550,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section
         "Send a zkApp transfer from timed account with all its available funds \
          at current global slot"
-        (send_zkapp ~logger node zkapp_command_transfer_from_third_timed_account)
+        (Zkapp.send ~logger node zkapp_command_transfer_from_third_timed_account)
     in
     let%bind () =
       section
@@ -620,7 +604,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          assert (
            Currency.Amount.( < ) proposed_balance
              (Option.value_exn locked_balance |> Currency.Balance.to_amount) ) ;
-         send_zkapp ~logger node
+         Zkapp.send ~logger node
            zkapp_command_invalid_transfer_from_timed_account )
     in
     let%bind () =
@@ -670,7 +654,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send a zkApp with invalid timing update"
-        (send_zkapp ~logger node zkapp_command_update_timing)
+        (Zkapp.send ~logger node zkapp_command_update_timing)
     in
     let%bind () =
       section "Wait for snapp with invalid timing update"
@@ -679,10 +663,10 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let%bind () =
       section "Verify timing has not changed"
         (let%bind ledger_update =
-           get_account_update ~logger node timing_account_id
+           Zkapp.get_account_update ~logger node timing_account_id
          in
          if
-           compatible_item ledger_update.timing timing_update.timing
+           Zkapp.compatible_item ledger_update.timing timing_update.timing
              ~equal:Mina_base.Account_update.Update.Timing_info.equal
          then (
            [%log info]

@@ -3,18 +3,10 @@ open Async
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "peers-reliability"
 
@@ -46,15 +38,9 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
               (List.map (Core.String.Map.data all_nodes) ~f:(fun n ->
                    `String (Node.id n) ) ) )
         ] ;
-    let node_a =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
-    let node_b =
-      Core.String.Map.find_exn (Network.block_producers network) "node-b"
-    in
-    let node_c =
-      Core.String.Map.find_exn (Network.block_producers network) "node-c"
-    in
+    let node_a = get_bp_node network "node-a" in
+    let node_b = get_bp_node network "node-b" in
+    let node_c = get_bp_node network "node-c" in
     (* witness the node_c frontier load on initialization *)
     let%bind () =
       wait_for t
@@ -142,7 +128,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
                 ~constraint_constants:(Network.constraint_constants network)
                 parties_spec
          in
-         let%bind () = send_zkapp ~logger node_c parties_create_accounts in
+         let%bind () = Zkapp.send ~logger node_c parties_create_accounts in
          wait_for_zkapp parties_create_accounts )
     in
     let%bind () =
@@ -158,8 +144,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          in
          () )
     in
-    [%log info] "%s test: zkApp account was created on node about to be stopped"
-      test_name ;
+    [%log info] "zkApp account was created on node about to be stopped" ;
     let%bind () =
       section "blocks are produced"
         (wait_for t (Wait_condition.blocks_to_be_produced 1))
@@ -167,9 +152,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let%bind () =
       section "short bootstrap"
         (let%bind () = Node.stop node_c in
-         [%log info]
-           "%s test: %s stopped, will now wait for blocks to be produced"
-           test_name (Node.id node_c) ;
+         [%log info] "%s stopped, will now wait for blocks to be produced"
+           (Node.id node_c) ;
          let%bind () =
            wait_for t
              ( Wait_condition.blocks_to_be_produced 1
@@ -180,16 +164,15 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          in
          let%bind () = Node.start ~fresh_state:true node_c in
          [%log info]
-           "%s test: %s started again, will now wait for this node to \
-            initialize"
-           test_name (Node.id node_c) ;
+           "%s started again, will now wait for this node to initialize"
+           (Node.id node_c) ;
          (* we've witnessed the loading of the node_c frontier on initialization
             so the event here must be the frontier loading on the node_c restart
          *)
          let%bind () =
            wait_for t @@ Wait_condition.persisted_frontier_loaded node_c
          in
-         let%bind () = wait_for t @@ Wait_condition.node_to_initialize node_c in
+         let%bind () = Wait_for.nodes_to_initialize t [ node_c ] in
          wait_for t
            ( Wait_condition.nodes_to_synchronize [ node_a; node_b; node_c ]
            |> Wait_condition.with_timeouts

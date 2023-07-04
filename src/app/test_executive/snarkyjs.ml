@@ -3,17 +3,10 @@ open Async
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
-
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
 
   let test_name = "snarkyjs"
 
@@ -43,15 +36,13 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let run network t =
     let open Malleable_error.Let_syntax in
     let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
-    let node =
-      Core.String.Map.find_exn (Network.block_producers network) "node"
-    in
+    let node = get_bp_node network "node" in
     let%bind fee_payer_key = priv_key_of_node node in
     let graphql_uri = Network.Node.graphql_uri node in
 
     let%bind () =
       [%log info] "Waiting for nodes to be initialized" ;
-      let%bind () = wait_for t (Wait_condition.node_to_initialize node) in
+      let%bind () = Wait_for.nodes_to_initialize t [ node ] in
       [%log info] "Running test script" ;
       let%bind.Deferred result =
         let%bind.Deferred process =
