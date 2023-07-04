@@ -480,6 +480,8 @@ module Test = struct
 
     type dsl
 
+    val test_name : string
+
     val config : Test_config.t
 
     val run : network -> dsl -> unit Malleable_error.t
