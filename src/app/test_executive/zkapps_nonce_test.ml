@@ -16,6 +16,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "zkapps-nonce"
+
   let config =
     let open Test_config in
     { default with
@@ -65,17 +67,6 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     incr transactions_sent ;
     send_zkapp ~logger node zkapp_command
 
-  (* Call [f] [n] times in sequence *)
-  let repeat_seq ~n ~f =
-    let open Malleable_error.Let_syntax in
-    let rec go n =
-      if n = 0 then return ()
-      else
-        let%bind () = f () in
-        go (n - 1)
-    in
-    go n
-
   let send_padding_transactions ~fee ~logger ~n nodes =
     let sender = List.nth_exn nodes 0 in
     let receiver = List.nth_exn nodes 1 in
@@ -89,17 +80,12 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let block_producer_nodes =
       Network.block_producers network |> Core.String.Map.data
     in
-    let node =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
-    let fish1_kp =
-      (Core.String.Map.find_exn (Network.genesis_keypairs network) "fish1")
-        .keypair
-    in
+    let node = get_bp_node network "node-a" in
+    let fish1_kp = (get_genesis_keypair network "fish1").keypair in
     let fish1_pk = Signature_lib.Public_key.compress fish1_kp.public_key in
     let fish1_account_id =
       Mina_base.Account_id.create fish1_pk Mina_base.Token_id.default

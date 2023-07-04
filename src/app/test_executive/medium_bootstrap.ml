@@ -16,6 +16,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "medium-bootstrap"
+
   let config =
     let open Test_config in
     { default with
@@ -46,38 +48,27 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let run network t =
     let open Network in
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let all_nodes = Network.all_nodes network in
+    let%bind () = Wait_for.all_nodes_to_initialize network t in
+    let node_a = get_bp_node network "node-a" in
+    let node_b = get_bp_node network "node-b" in
+    let node_c = get_bp_node network "node-c" in
     let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
-    let node_a =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
-    let node_b =
-      Core.String.Map.find_exn (Network.block_producers network) "node-b"
-    in
-    let node_c =
-      Core.String.Map.find_exn (Network.block_producers network) "node-c"
-    in
-    let%bind () =
-      section "blocks are produced"
-        (wait_for t (Wait_condition.blocks_to_be_produced 1))
+      section "blocks are produced" (Wait_for.blocks_to_be_produced t 1)
     in
     let%bind () =
       section "restart node after 2k+1, ie 5, blocks"
         (let%bind () = Node.stop node_c in
          [%log info] "%s stopped, will now wait for blocks to be produced"
            (Node.id node_c) ;
-         let%bind () = wait_for t (Wait_condition.blocks_to_be_produced 5) in
+         let%bind () = Wait_for.blocks_to_be_produced t 5 in
          let%bind () = Node.start ~fresh_state:true node_c in
          [%log info]
            "%s started again, will now wait for this node to initialize"
            (Node.id node_c) ;
-         let%bind () = wait_for t (Wait_condition.node_to_initialize node_c) in
-         wait_for t
-           (Wait_condition.nodes_to_synchronize [ node_a; node_b; node_c ]) )
+         let%bind () = Wait_for.node_to_initialize t node_c in
+         Wait_for.nodes_to_synchronize t [ node_a; node_b; node_c ] )
     in
     section "network is fully connected after one node was restarted"
       (let%bind () = Malleable_error.lift (after (Time.Span.of_sec 240.0)) in

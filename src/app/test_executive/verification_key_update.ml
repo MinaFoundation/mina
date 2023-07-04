@@ -67,6 +67,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "verification-key"
+
   let config =
     let open Test_config in
     { default with
@@ -96,7 +98,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     ; snark_worker_fee = "0.0001"
     }
 
-  let logger = Logger.create ()
+  let logger = Logger.create ~prefix:(test_name ^ " test: ") ()
 
   let run network t =
     let open Malleable_error.Let_syntax in

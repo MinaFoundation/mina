@@ -15,6 +15,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "delegation"
+
   let config =
     let open Test_config in
     { default with
@@ -32,22 +34,14 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ "test: ") () in
     (* fee for user commands *)
     let fee = Currency.Fee.of_nanomina_int_exn 10_000_000 in
-    let all_nodes = Network.all_nodes network in
+    let%bind () = Wait_for.all_nodes_to_initialize network t in
+    let node_a = get_bp_node network "node-a" in
+    let node_b = get_bp_node network "node-b" in
     let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
-    let node_a =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
-    let node_b =
-      Core.String.Map.find_exn (Network.block_producers network) "node-b"
-    in
-    let%bind () =
-      section "Delegate all mina currency from node_b to node_a"
+      section "Delegate all tokens from node_b to node_a"
         (let delegation_receiver = node_a in
          let%bind delegation_receiver_pub_key =
            pub_key_of_node delegation_receiver

@@ -16,6 +16,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "peers-reliability"
+
   let config =
     let open Test_config in
     { default with
@@ -35,7 +37,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let run network t =
     let open Network in
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let all_nodes = Network.all_nodes network in
     [%log info] "peers_list"
       ~metadata:
@@ -156,7 +158,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          in
          () )
     in
-    [%log info] "zkApp account was created on node about to be stopped" ;
+    [%log info] "%s test: zkApp account was created on node about to be stopped"
+      test_name ;
     let%bind () =
       section "blocks are produced"
         (wait_for t (Wait_condition.blocks_to_be_produced 1))
@@ -164,8 +167,9 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let%bind () =
       section "short bootstrap"
         (let%bind () = Node.stop node_c in
-         [%log info] "%s stopped, will now wait for blocks to be produced"
-           (Node.id node_c) ;
+         [%log info]
+           "%s test: %s stopped, will now wait for blocks to be produced"
+           test_name (Node.id node_c) ;
          let%bind () =
            wait_for t
              ( Wait_condition.blocks_to_be_produced 1
@@ -176,8 +180,9 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          in
          let%bind () = Node.start ~fresh_state:true node_c in
          [%log info]
-           "%s started again, will now wait for this node to initialize"
-           (Node.id node_c) ;
+           "%s test: %s started again, will now wait for this node to \
+            initialize"
+           test_name (Node.id node_c) ;
          (* we've witnessed the loading of the node_c frontier on initialization
             so the event here must be the frontier loading on the node_c restart
          *)

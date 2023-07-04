@@ -17,6 +17,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "payments"
+
   (* TODO: refactor all currency values to decimal represenation *)
   (* TODO: test account creation fee *)
   let config =
@@ -80,12 +82,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let run network t =
     let open Network in
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
-    let all_nodes = Network.all_nodes network in
-    let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
+    let%bind () = Wait_for.all_nodes_to_initialize network t in
     let untimed_node_a =
       Core.String.Map.find_exn
         (Network.block_producers network)
@@ -96,15 +94,9 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
         (Network.block_producers network)
         "untimed-node-b"
     in
-    let timed_node_c =
-      Core.String.Map.find_exn (Network.block_producers network) "timed-node-c"
-    in
-    let fish1 =
-      Core.String.Map.find_exn (Network.genesis_keypairs network) "fish1"
-    in
-    let fish2 =
-      Core.String.Map.find_exn (Network.genesis_keypairs network) "fish2"
-    in
+    let timed_node_c = get_bp_node network "timed-node-c" in
+    let fish1 = get_genesis_keypair network "fish1" in
+    let fish2 = get_genesis_keypair network "fish2" in
     [%log info] "extra genesis keypairs: %s"
       (List.to_string [ fish1.keypair; fish2.keypair ]
          ~f:(fun { Signature_lib.Keypair.public_key; _ } ->
@@ -113,16 +105,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let snark_coordinator =
       Core.String.Map.find_exn (Network.all_nodes network) "snark-node"
     in
-    let snark_node_key1 =
-      Core.String.Map.find_exn
-        (Network.genesis_keypairs network)
-        "snark-node-key1"
-    in
-    let snark_node_key2 =
-      Core.String.Map.find_exn
-        (Network.genesis_keypairs network)
-        "snark-node-key2"
-    in
+    let snark_node_key1 = get_genesis_keypair network "snark-node-key1" in
+    let snark_node_key2 = get_genesis_keypair network "snark-node-key2" in
     [%log info] "snark node keypairs: %s"
       (List.to_string [ snark_node_key1.keypair; snark_node_key2.keypair ]
          ~f:(fun { Signature_lib.Keypair.public_key; _ } ->

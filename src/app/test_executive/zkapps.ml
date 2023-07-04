@@ -16,6 +16,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "zkapps"
+
   let config =
     let open Test_config in
     { default with
@@ -58,17 +60,6 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let send_zkapp ~logger node zkapp_command =
     incr transactions_sent ;
     send_zkapp ~logger node zkapp_command
-
-  (* Call [f] [n] times in sequence *)
-  let repeat_seq ~n ~f =
-    let open Malleable_error.Let_syntax in
-    let rec go n =
-      if n = 0 then return ()
-      else
-        let%bind () = f () in
-        go (n - 1)
-    in
-    go n
 
   let send_padding_transactions ~fee ~logger ~n nodes =
     let sender = List.nth_exn nodes 0 in
@@ -126,7 +117,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let block_producer_nodes =
       Network.block_producers network |> Core.String.Map.data
     in
@@ -141,14 +132,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       Core.String.Map.find_exn (Network.block_producers network) "node-a"
     in
     let constraint_constants = Network.constraint_constants network in
-    let fish1_kp =
-      (Core.String.Map.find_exn (Network.genesis_keypairs network) "fish1")
-        .keypair
-    in
-    let fish2_kp =
-      (Core.String.Map.find_exn (Network.genesis_keypairs network) "fish2")
-        .keypair
-    in
+    let fish1_kp = (get_genesis_keypair network "fish1").keypair in
+    let fish2_kp = (get_genesis_keypair network "fish2").keypair in
     let num_zkapp_accounts = 3 in
     let zkapp_keypairs =
       List.init num_zkapp_accounts ~f:(fun _ -> Signature_lib.Keypair.create ())

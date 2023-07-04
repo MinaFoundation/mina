@@ -15,6 +15,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   type dsl = Dsl.t
 
+  let test_name = "zkapps-timing"
+
   let config =
     let open Test_config in
     { default with
@@ -43,7 +45,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let all_nodes = Network.all_nodes network in
     let%bind () =
       wait_for t
