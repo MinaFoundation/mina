@@ -436,7 +436,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
             Hence, 6*2 = 12 transactions untill we get the first snarked ledger.
             2 successful txn are sent in the prior course of this test,
             so spamming out at least 10 more here will trigger a ledger proof to be emitted *)
-           send_payments ~logger ~sender_pub_key ~receiver_pub_key
+           Payment_util.send_n ~logger ~sender_pub_key ~receiver_pub_key
              ~amount:Currency.Amount.one ~fee ~node:sender 10
          in
          Wait_for.ledger_proofs_emitted_since_genesis t ~test_config:config
@@ -515,7 +515,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          let sender = untimed_node_a in
          let%bind sender_pub_key = pub_key_of_node sender in
          let%bind _ =
-           send_payments ~logger ~sender_pub_key ~receiver_pub_key
+           Payment_util.send_n ~logger ~sender_pub_key ~receiver_pub_key
              ~amount:Currency.Amount.one ~fee ~node:sender 12
          in
          Wait_for.ledger_proofs_emitted_since_genesis t ~num_proofs:2
@@ -574,9 +574,5 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              config.snark_worker_fee )
     in
     section_hard "running replayer"
-      (let%bind logs =
-         Network.Node.run_replayer ~logger
-           (List.hd_exn @@ (Network.archive_nodes network |> Core.Map.data))
-       in
-       check_replayer_logs ~logger logs )
+      (Archive_node.run_and_check_replayer ~logger network)
 end

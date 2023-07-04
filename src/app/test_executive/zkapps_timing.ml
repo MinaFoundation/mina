@@ -356,7 +356,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send a zkApp to create a zkApp account with timing"
-        (Zkapp.send ~logger node zkapp_command_create_account_with_timing)
+        (Zkapp_util.send ~logger node zkapp_command_create_account_with_timing)
     in
     let%bind () =
       section
@@ -367,7 +367,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send zkApp to create a 2nd zkApp account with timing"
-        (Zkapp.send ~logger node zkapp_command_create_second_account_with_timing)
+        (Zkapp_util.send ~logger node
+           zkapp_command_create_second_account_with_timing )
     in
     let%bind () =
       section
@@ -378,7 +379,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send zkApp to create a 3rd zkApp account with timing"
-        (Zkapp.send ~logger node zkapp_command_create_third_account_with_timing)
+        (Zkapp_util.send ~logger node
+           zkapp_command_create_third_account_with_timing )
     in
     let%bind () =
       section
@@ -390,10 +392,10 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let%bind () =
       section "Verify zkApp timing in ledger"
         (let%bind ledger_update =
-           Zkapp.get_account_update ~logger node timing_account_id
+           Account_util.get_update ~logger node timing_account_id
          in
          if
-           Zkapp.compatible_updates ~ledger_update
+           Zkapp_util.compatible_updates ~ledger_update
              ~requested_update:timing_update
          then (
            [%log info]
@@ -421,15 +423,15 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send invalid zkApp with zero vesting period in timing"
-        (Zkapp.send_invalid ~logger node zkapp_command_with_zero_vesting_period
-           "Zero vesting period" )
+        (Zkapp_util.send_invalid ~logger node
+           zkapp_command_with_zero_vesting_period "Zero vesting period" )
     in
     (* let%bind before_balance =
          get_account_balance ~logger node timing_account_id
        in *)
     let%bind () =
       section "Send a zkApp with transfer from timed account that succeeds"
-        (Zkapp.send ~logger node zkapp_command_transfer_from_timed_account)
+        (Zkapp_util.send ~logger node zkapp_command_transfer_from_timed_account)
     in
     let%bind () =
       section "Waiting for zkApp with transfer from timed account that succeeds"
@@ -550,7 +552,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section
         "Send a zkApp transfer from timed account with all its available funds \
          at current global slot"
-        (Zkapp.send ~logger node zkapp_command_transfer_from_third_timed_account)
+        (Zkapp_util.send ~logger node
+           zkapp_command_transfer_from_third_timed_account )
     in
     let%bind () =
       section
@@ -604,7 +607,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          assert (
            Currency.Amount.( < ) proposed_balance
              (Option.value_exn locked_balance |> Currency.Balance.to_amount) ) ;
-         Zkapp.send ~logger node
+         Zkapp_util.send ~logger node
            zkapp_command_invalid_transfer_from_timed_account )
     in
     let%bind () =
@@ -654,7 +657,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section "Send a zkApp with invalid timing update"
-        (Zkapp.send ~logger node zkapp_command_update_timing)
+        (Zkapp_util.send ~logger node zkapp_command_update_timing)
     in
     let%bind () =
       section "Wait for snapp with invalid timing update"
@@ -663,10 +666,10 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let%bind () =
       section "Verify timing has not changed"
         (let%bind ledger_update =
-           Zkapp.get_account_update ~logger node timing_account_id
+           Account_util.get_update ~logger node timing_account_id
          in
          if
-           Zkapp.compatible_item ledger_update.timing timing_update.timing
+           Zkapp_util.compatible_item ledger_update.timing timing_update.timing
              ~equal:Mina_base.Account_update.Update.Timing_info.equal
          then (
            [%log info]
@@ -681,9 +684,5 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              (Error.of_string "Ledger update contains a timing update") ) )
     in
     section_hard "Running replayer"
-      (let%bind logs =
-         Network.Node.run_replayer ~logger
-           (List.hd_exn @@ (Network.archive_nodes network |> Core.Map.data))
-       in
-       check_replayer_logs ~logger logs )
+      (Archive_node.run_and_check_replayer ~logger network)
 end

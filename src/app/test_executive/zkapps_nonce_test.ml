@@ -245,7 +245,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section_hard
         "Send a zkapp commands with fee payer nonce increments and nonce \
          preconditions"
-        (Zkapp.send_batch ~logger node
+        (Zkapp_util.send_batch ~logger node
            [ invalid_nonce_zkapp_cmd_from_fish1; valid_zkapp_cmd_from_fish1 ] )
     in
     let%bind () =
@@ -264,7 +264,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section_hard
         "Send zkapp commands with account updates for fish1 that sets send \
          permission to Proof and then tries to send funds "
-        (Zkapp.send_batch ~logger node
+        (Zkapp_util.send_batch ~logger node
            [ set_permission_zkapp_cmd_from_fish1
            ; valid_fee_invalid_permission_zkapp_cmd_from_fish1
            ; invalid_fee_invalid_permission_zkapp_cmd_from_fish1
@@ -332,10 +332,5 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     Event_router.cancel (event_router t) snark_work_event_subscription () ;
     Event_router.cancel (event_router t) snark_work_failure_subscription () ;
     section_hard "Running replayer"
-      (let%bind logs =
-         Network.Node.run_replayer ~logger
-           ( List.hd_exn
-           @@ (Network.archive_nodes network |> Core.String.Map.data) )
-       in
-       check_replayer_logs ~logger logs )
+      (Archive_node.run_and_check_replayer ~logger network)
 end

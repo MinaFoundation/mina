@@ -52,7 +52,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let send_zkapp ~logger node zkapp_command =
     incr transactions_sent ;
-    Zkapp.send ~logger node zkapp_command
+    Zkapp_util.send ~logger node zkapp_command
 
   let send_padding_transactions ~fee ~logger ~n nodes =
     let sender = List.nth_exn nodes 0 in
@@ -98,7 +98,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     match expected_failure with
     | Some failure ->
-        Zkapp.send_invalid_payment ~logger ~sender_pub_key:sender_pk
+        Payment_util.send_invalid ~logger ~sender_pub_key:sender_pk
           ~receiver_pub_key:receiver_pk ~amount ~fee ~nonce ~memo ~valid_until
           ~raw_signature ~expected_failure:failure node
     | None ->
@@ -672,7 +672,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              [%log info] "Verifying permissions for account"
                ~metadata:[ ("account_id", Account_id.to_yojson account_id) ] ;
              let%bind ledger_permissions =
-               Zkapp.get_account_permissions ~logger node account_id
+               Account_util.get_permissions ~logger node account_id
              in
              if Permissions.equal ledger_permissions permissions_updated then (
                [%log info] "Ledger, updated permissions are equal" ;
@@ -692,7 +692,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section_hard "Send a zkapp with an insufficient fee"
-        (Zkapp.send_invalid ~logger node zkapp_command_insufficient_fee
+        (Zkapp_util.send_invalid ~logger node zkapp_command_insufficient_fee
            "Insufficient fee" )
     in
     (* Won't be accepted until the previous transactions are applied *)
@@ -702,34 +702,34 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section_hard "Send a zkapp with an invalid proof"
-        (Zkapp.send_invalid ~logger node zkapp_command_invalid_proof
+        (Zkapp_util.send_invalid ~logger node zkapp_command_invalid_proof
            "Verification_failed" )
     in
     let%bind () =
       section_hard "Send a zkapp with an insufficient replace fee"
-        (Zkapp.send_invalid ~logger node zkapp_command_insufficient_replace_fee
-           "Insufficient_replace_fee" )
+        (Zkapp_util.send_invalid ~logger node
+           zkapp_command_insufficient_replace_fee "Insufficient_replace_fee" )
     in
     let%bind () =
       section_hard "Send a zkApp transaction with an invalid nonce"
-        (Zkapp.send_invalid ~logger node zkapp_command_invalid_nonce
+        (Zkapp_util.send_invalid ~logger node zkapp_command_invalid_nonce
            "Invalid_nonce" )
     in
     let%bind () =
       section_hard
         "Send a zkApp transaction with insufficient_funds, fee too high"
-        (Zkapp.send_invalid ~logger node zkapp_command_insufficient_funds
+        (Zkapp_util.send_invalid ~logger node zkapp_command_insufficient_funds
            "Insufficient_funds" )
     in
     let%bind () =
       section_hard "Send a zkApp transaction with an invalid signature"
-        (Zkapp.send_invalid ~logger node zkapp_command_invalid_signature
+        (Zkapp_util.send_invalid ~logger node zkapp_command_invalid_signature
            "Verification_failed" )
     in
     let%bind () =
       section_hard "Send a zkApp transaction with a nonexistent fee payer"
-        (Zkapp.send_invalid ~logger node zkapp_command_nonexistent_fee_payer
-           "Fee_payer_account_not_found" )
+        (Zkapp_util.send_invalid ~logger node
+           zkapp_command_nonexistent_fee_payer "Fee_payer_account_not_found" )
     in
     let%bind () =
       section_hard
@@ -775,7 +775,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              [%log info] "Verifying updates for account"
                ~metadata:[ ("account_id", Account_id.to_yojson account_id) ] ;
              let%bind ledger_update =
-               Zkapp.get_account_update ~logger node account_id
+               Account_util.get_update ~logger node account_id
              in
              if
                compatible_updates ~ledger_update
@@ -815,9 +815,5 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     Event_router.cancel (event_router t) snark_work_event_subscription () ;
     Event_router.cancel (event_router t) snark_work_failure_subscription () ;
     section_hard "Running replayer"
-      (let%bind logs =
-         Network.Node.run_replayer ~logger
-           (List.hd_exn @@ (Network.archive_nodes network |> Core.Map.data))
-       in
-       check_replayer_logs ~logger logs )
+      (Archive_node.run_and_check_replayer ~logger network)
 end

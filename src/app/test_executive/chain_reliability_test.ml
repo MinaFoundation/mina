@@ -29,7 +29,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let module Node = Network.Node in
     let open Malleable_error.Let_syntax in
     let logger = Logger.create ~prefix:(test_name ^ "test: ") () in
-    let all_nodes = Network.all_nodes network in
+    let all_nodes = all_nodes network in
     let%bind () = Wait_for.all_nodes_to_initialize t network in
     let node_a = get_bp_node network "node-a" in
     let node_b = get_bp_node network "node-b" in
@@ -75,7 +75,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          let fee = Currency.Fee.of_mina_string_exn "1" in
          [%log info] "will now send %d payments" num_payments ;
          let%bind hashlist =
-           send_payments ~logger ~sender_pub_key ~receiver_pub_key
+           Payment_util.send_n ~logger ~sender_pub_key ~receiver_pub_key
              ~node:sender_bp ~fee ~amount num_payments
          in
          [%log info] "sending payments done. will now wait for payments" ;
@@ -89,8 +89,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     section "common prefix of all nodes is no farther back than 1 block"
       (* the common prefix test relies on at least 4 blocks having been produced.  previous sections altogether have already produced 4, so no further block production is needed.  if previous sections change, then this may need to be re-adjusted*)
       (let%bind (labeled_chains : (string * string list) list) =
-         Malleable_error.List.map (Core.String.Map.data all_nodes)
-           ~f:(fun node ->
+         Malleable_error.List.map all_nodes ~f:(fun node ->
              let%map chain = Network.Node.must_get_best_chain ~logger node in
              (Node.id node, List.map ~f:(fun b -> b.state_hash) chain) )
        in

@@ -299,7 +299,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
     let%bind () =
       section "Send a zkApp to create a zkApp account"
-        (Zkapp.send ~logger whale1 zkapp_command_create_account)
+        (Zkapp_util.send ~logger whale1 zkapp_command_create_account)
     in
     let%bind () =
       section
@@ -310,21 +310,21 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section
         "Send zkApp to update verification key to v1 and then refers to v1 in \
          the subsequent account update"
-        (Zkapp.send ~logger whale1 zkapp_command_update_vk1)
+        (Zkapp_util.send ~logger whale1 zkapp_command_update_vk1)
     in
 
     let%bind () =
       section
         "Send zkApp to update to a new verification key v2 and then refers to \
          the old key v1"
-        (Zkapp.send_invalid ~logger whale1 zkapp_command_update_vk2_refers_vk1
-           "Verification_failed" )
+        (Zkapp_util.send_invalid ~logger whale1
+           zkapp_command_update_vk2_refers_vk1 "Verification_failed" )
     in
     let%bind () =
       section
         "Send zkApp to update to a new verification key v2 and then refers to \
          that"
-        (Zkapp.send ~logger whale1 zkapp_command_update_vk2)
+        (Zkapp_util.send ~logger whale1 zkapp_command_update_vk2)
     in
     let%bind () =
       section

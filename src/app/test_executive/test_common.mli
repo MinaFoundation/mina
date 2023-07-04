@@ -7,17 +7,60 @@ module Make : functor
     -> f:(unit -> unit Integration_test_lib.Malleable_error.t)
     -> unit Integration_test_lib.Malleable_error.t
 
-  (** TODO: [send_payments] *)
-  val send_payments :
-       logger:Logger.t
-    -> sender_pub_key:Signature_lib.Public_key.Compressed.t
-    -> receiver_pub_key:Signature_lib.Public_key.Compressed.t
-    -> amount:Currency.Amount.t
-    -> fee:Currency.Fee.t
-    -> node:Inputs.Engine.Network.Node.t
-    -> int
-    -> Mina_transaction.Transaction_hash.t list
-       Integration_test_lib.Malleable_error.t
+  module Payment_util : sig
+    (** [send_n ~logger ~sender_pub_key ~receiver_pub_key ~amount ~fee ~node n]
+          [node] attempts to send [n] payments of [amount] from [sender_pub_key] to
+          [receiver_pub_key] paying [fee] for each, logs progress to [logger] *)
+    val send_n :
+         logger:Logger.t
+      -> sender_pub_key:Signature_lib.Public_key.Compressed.t
+      -> receiver_pub_key:Signature_lib.Public_key.Compressed.t
+      -> amount:Currency.Amount.t
+      -> fee:Currency.Fee.t
+      -> node:Inputs.Engine.Network.Node.t
+      -> int
+      -> Mina_transaction.Transaction_hash.t list
+         Integration_test_lib.Malleable_error.t
+
+    (** TODO: [send_invalid ~logger node ~sender_pub_key ~receiver_pub_key ~amount ~fee ~nonce ~memo ~valid_until ~raw_signature ~expected_failure]*)
+    val send_invalid :
+         logger:Logger.t
+      -> Inputs.Engine.Network.Node.t
+      -> sender_pub_key:Signature_lib.Public_key.Compressed.t
+      -> receiver_pub_key:Signature_lib.Public_key.Compressed.t
+      -> amount:Currency.Amount.t
+      -> fee:Currency.Fee.t
+      -> nonce:Unsigned.uint32
+      -> memo:string
+      -> valid_until:Mina_numbers.Global_slot_since_genesis.t
+      -> raw_signature:string
+      -> expected_failure:string
+      -> unit Integration_test_lib.Malleable_error.t
+  end
+
+  module Account_util : sig
+    (** TODO: [get_permissions ~logger node account_id]*)
+    val get_permissions :
+         logger:Logger.t
+      -> Inputs.Engine.Network.Node.t
+      -> Mina_base.Account_id.t
+      -> ( Mina_base.Permissions.t
+           Integration_test_lib.Malleable_error.Result_accumulator.t
+         , Integration_test_lib.Malleable_error.Hard_fail.t )
+         result
+         Async.Deferred.t
+
+    (** TODO: [get_update ~logger node account_id]*)
+    val get_update :
+         logger:Logger.t
+      -> Inputs.Engine.Network.Node.t
+      -> Mina_base.Account_id.t
+      -> ( Mina_base.Account_update.Update.t
+           Integration_test_lib.Malleable_error.Result_accumulator.t
+         , Integration_test_lib.Malleable_error.Hard_fail.t )
+         result
+         Async.Deferred.t
+  end
 
   module Wait_for : sig
     (** [nodes_to_initialize dsl nodes] uses [dsl]'s wait condition to wait for [nodes] to initialize *)
@@ -57,14 +100,17 @@ module Make : functor
       -> int
       -> unit Integration_test_lib.Malleable_error.t
 
-    (** TODO: [signed_command_to_be_included_in_frontier dsl ~txn_hash ~node_included_in] *)
+    (** [signed_command_to_be_included_in_frontier dsl ~txn_hash ~node_included_in]
+        uses [dsl]'s wait condition to wait for the signed command with transaction
+        hash [txn_hash] to be included in [node_included_in] *)
     val signed_command_to_be_included_in_frontier :
          Inputs.Dsl.t
       -> txn_hash:Mina_transaction.Transaction_hash.t
       -> node_included_in:[ `Any_node | `Node of Inputs.Engine.Network.Node.t ]
       -> unit Integration_test_lib.Malleable_error.t
 
-    (** TODO: [with_timeouts dsl ~condition ~soft_timeout ~hard_timeout] *)
+    (** [with_timeouts dsl ~condition ~soft_timeout ~hard_timeout] uses [dsl]'s wait
+        condition to wait for [condition] with a [soft_timeout] and a [hard_timeout] *)
     val with_timeouts :
          Inputs.Dsl.t
       -> condition:Inputs.Dsl.Wait_condition.t
@@ -72,7 +118,10 @@ module Make : functor
       -> hard_timeout:Integration_test_lib.Network_time_span.t
       -> unit Integration_test_lib.Malleable_error.t
 
-    (** [zkapp_to_be_included_in_frontier] *)
+    (** [zkapp_to_be_included_in_frontier dsl ~has_failures ~zkapp_command ~soft_slots]
+        uses [dsl]'s wait condition to wait for [zkapp_command] to be included in the
+        transition frontier with a soft timeout equal to the span of [soft_slots] slots
+        and a hard timeout equal to the span of [2 * soft_slots] slots *)
     val zkapp_to_be_included_in_frontier :
          Inputs.Dsl.t
       -> has_failures:bool
@@ -107,7 +156,7 @@ module Make : functor
        Inputs.Engine.Network.Node.t
     -> Signature_lib.Private_key.t Integration_test_lib.Malleable_error.t
 
-  (** TODO: [check_common_prefixes ~tolerance ~logger ...]*)
+  (** TODO: [check_common_prefixes ~tolerance ~logger chains]*)
   val check_common_prefixes :
        tolerance:int
     -> logger:Logger.t
@@ -121,22 +170,23 @@ module Make : functor
     -> (Inputs.Engine.Network.Node.t * (string * string list)) list
        Integration_test_lib.Malleable_error.t
 
-  (** TODO: [assert_peers_completely_connected ...]*)
+  (** TODO: [assert_peers_completely_connected nodes_and_responses]*)
   val assert_peers_completely_connected :
        (Inputs.Engine.Network.Node.t * (string * string list)) list
     -> unit Integration_test_lib.Malleable_error.t
 
-  (** TODO: [assert_peers_cant_be_partitioned ~max_disconnection ...]*)
+  (** TODO: [assert_peers_cant_be_partitioned ~max_disconnection nodes_and_responses]*)
   val assert_peers_cant_be_partitioned :
        max_disconnections:int
-    -> ('a * (string * string list)) list
+    -> (_ * (string * string list)) list
     -> ( unit Integration_test_lib.Malleable_error.Result_accumulator.t
        , Integration_test_lib.Malleable_error.Hard_fail.t )
        result
        Async.Deferred.t
 
-  module Zkapp : sig
-    (** TODO: [send_batch ~logger node zkapp_command]*)
+  module Zkapp_util : sig
+    (** [send_batch ~logger node zkapp_commands] returns the result of sending
+        all commands in [zkapp_commands] *)
     val send_batch :
          logger:Logger.t
       -> Inputs.Engine.Network.Node.t
@@ -146,7 +196,8 @@ module Make : functor
          result
          Async.Deferred.t
 
-    (** TODO: [send ~logger node zkapp_command]*)
+    (** [send ~logger node zkapp_command] returns the result of [node]
+        sending the [zkapp_command] to the network, logs with [logger] *)
     val send :
          logger:Logger.t
       -> Inputs.Engine.Network.Node.t
@@ -156,7 +207,9 @@ module Make : functor
          result
          Async.Deferred.t
 
-    (** TODO: [send_invalid ~logger node zkapp_command ...]*)
+    (** [send_invalid ~logger node zkapp_command substring_of_error_msg]
+        returns the result of [node] sending an invalid [zkapp_command]
+        expecting error [substring_of_error_msg], logs with [logger] *)
     val send_invalid :
          logger:Logger.t
       -> Inputs.Engine.Network.Node.t
@@ -167,44 +220,18 @@ module Make : functor
          result
          Async.Deferred.t
 
-    (** TODO: [send_invalid_payment ~logger node ~sender_pub_key ~receiver_pub_key ~amount ~fee ~nonce ~memo ~valid_until ~raw_signature ~expected_failure]*)
-    val send_invalid_payment :
+    (** TODO: [get_pooled_zkapp_commands ~logger node ~pk] *)
+    val get_pooled_zkapp_commands :
          logger:Logger.t
       -> Inputs.Engine.Network.Node.t
-      -> sender_pub_key:Signature_lib.Public_key.Compressed.t
-      -> receiver_pub_key:Signature_lib.Public_key.Compressed.t
-      -> amount:Currency.Amount.t
-      -> fee:Currency.Fee.t
-      -> nonce:Unsigned.uint32
-      -> memo:string
-      -> valid_until:Mina_numbers.Global_slot_since_genesis.t
-      -> raw_signature:string
-      -> expected_failure:string
-      -> unit Integration_test_lib.Malleable_error.t
-
-    (** TODO: [get_account_permissions ~logger node account_id]*)
-    val get_account_permissions :
-         logger:Logger.t
-      -> Inputs.Engine.Network.Node.t
-      -> Mina_base.Account_id.t
-      -> ( Mina_base.Permissions.t
-           Integration_test_lib.Malleable_error.Result_accumulator.t
+      -> pk:Signature_lib.Public_key.Compressed.t
+      -> ( string list Integration_test_lib.Malleable_error.Result_accumulator.t
          , Integration_test_lib.Malleable_error.Hard_fail.t )
          result
          Async.Deferred.t
 
-    (** TODO: [get_account_update ~logger node account_id]*)
-    val get_account_update :
-         logger:Logger.t
-      -> Inputs.Engine.Network.Node.t
-      -> Mina_base.Account_id.t
-      -> ( Mina_base.Account_update.Update.t
-           Integration_test_lib.Malleable_error.Result_accumulator.t
-         , Integration_test_lib.Malleable_error.Hard_fail.t )
-         result
-         Async.Deferred.t
-
-    (** TODO: [compatible_item ... ~equal]*)
+    (** [compatible_item item1 item2 ~equal] compares items of different types
+        [item1] and [item2] for equality under [equal] *)
     val compatible_item :
          'a Mina_base.Zkapp_basic.Set_or_keep.t
       -> 'b Mina_base.Zkapp_basic.Set_or_keep.t
@@ -218,12 +245,14 @@ module Make : functor
       -> bool
   end
 
-  (** TODO: [check_replayer_logs ~logger ...]*)
-  val check_replayer_logs :
-       logger:Logger.t
-    -> string
-    -> ( unit Integration_test_lib.Malleable_error.Result_accumulator.t
-       , Integration_test_lib.Malleable_error.Hard_fail.t )
-       result
-       Async.Deferred.t
+  module Archive_node : sig
+    (** [run_and_check_replayer ~logger network] runs and checks the archive node's replayer *)
+    val run_and_check_replayer :
+         logger:Logger.t
+      -> Inputs.Engine.Network.t
+      -> ( unit Integration_test_lib.Malleable_error.Result_accumulator.t
+         , Integration_test_lib.Malleable_error.Hard_fail.t )
+         result
+         Async.Deferred.t
+  end
 end

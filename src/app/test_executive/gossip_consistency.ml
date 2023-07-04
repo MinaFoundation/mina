@@ -38,8 +38,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let amount = Currency.Amount.of_nanomina_int_exn 10_000_000 in
     [%log info] "will now send %d payments" num_payments ;
     let%bind hashlist =
-      send_payments ~logger ~sender_pub_key ~receiver_pub_key ~node:sender_bp
-        ~fee ~amount num_payments
+      Payment_util.send_n ~logger ~sender_pub_key ~receiver_pub_key
+        ~node:sender_bp ~fee ~amount num_payments
     in
     [%log info] "sending payments done. will now wait for payments" ;
     let%bind () =
