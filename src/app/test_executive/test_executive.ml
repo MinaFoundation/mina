@@ -238,7 +238,8 @@ let dispatch_cleanup ~logger ~pause_cleanup_func ~network_cleanup_func
 
 let test_name (test : test)
     (inputs : (module Integration_test_lib.Intf.Test.Inputs_intf)) =
-  let module Test = (val test) ((val inputs)) in
+  let (module Inputs) = inputs in
+  let module Test = (val test) (Inputs) in
   Test.test_name
 
 let main inputs =
@@ -249,12 +250,7 @@ let main inputs =
   let open Test_inputs in
   let (module Test) = inputs.test in
   let test_name = test_name inputs.test (module Test_inputs) in
-  let (module T) =
-    (module Test (Test_inputs) : Intf.Test.S
-      with type network = Engine.Network.t
-       and type node = Engine.Network.Node.t
-       and type dsl = Dsl.t )
-  in
+  let module T = Test (Test_inputs) in
   (*
     (module Test (Test_inputs)
     : Intf.Test.S
