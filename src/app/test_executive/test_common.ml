@@ -7,6 +7,7 @@ open Mina_transaction
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
   open Inputs
+  open Engine
   open Dsl
 
   let repeat_seq ~n ~f =
@@ -27,7 +28,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       else
         let%bind hash =
           let%map { hash; nonce; _ } =
-            Engine.Network.Node.must_send_payment ~logger ~sender_pub_key
+            Network.Node.must_send_payment ~logger ~sender_pub_key
               ~receiver_pub_key ~amount ~fee node
           in
           [%log info]
@@ -43,13 +44,11 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     go n []
 
   module Wait_for = struct
-    let all_nodes_to_initialize dsl network =
-      wait_for dsl
-        ( Wait_condition.nodes_to_initialize @@ Core.String.Map.data
-        @@ Engine.Network.all_nodes network )
+    let nodes_to_initialize dsl nodes =
+      wait_for dsl (Wait_condition.nodes_to_initialize nodes)
 
-    let node_to_initialize dsl node =
-      wait_for dsl (Wait_condition.node_to_initialize node)
+    let all_nodes_to_initialize dsl network =
+      nodes_to_initialize dsl (Core.String.Map.data @@ Network.all_nodes network)
 
     let blocks_to_be_produced dsl n =
       wait_for dsl (Wait_condition.blocks_to_be_produced n)
@@ -107,26 +106,26 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              ~zkapp_command )
   end
 
+  let all_nodes network = Core.String.Map.data (Network.all_nodes network)
+
   let get_node network node_name =
-    Core.String.Map.find_exn (Engine.Network.all_nodes network) node_name
+    Core.String.Map.find_exn (Network.all_nodes network) node_name
 
   let get_bp_node network node_name =
-    Core.String.Map.find_exn (Engine.Network.block_producers network) node_name
+    Core.String.Map.find_exn (Network.block_producers network) node_name
 
   let get_genesis_keypair network account_name =
-    Core.String.Map.find_exn
-      (Engine.Network.genesis_keypairs network)
-      account_name
+    Core.String.Map.find_exn (Network.genesis_keypairs network) account_name
 
   let make_get_key ~f node =
-    match Engine.Network.Node.network_keypair node with
+    match Network.Node.network_keypair node with
     | Some nk ->
         Malleable_error.return (f nk)
     | None ->
         Malleable_error.hard_error_format
           "Node '%s' did not have a network keypair, if node is a block \
            producer this should not happen"
-          (Engine.Network.Node.id node)
+          (Network.Node.id node)
 
   let pub_key_of_node =
     make_get_key ~f:(fun nk ->
@@ -185,7 +184,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let fetch_connectivity_data ~logger nodes =
     let open Malleable_error.Let_syntax in
     Malleable_error.List.map nodes ~f:(fun node ->
-        let%map response = Engine.Network.Node.must_get_peer_id ~logger node in
+        let%map response = Network.Node.must_get_peer_id ~logger node in
         (node, response) )
 
   let assert_peers_completely_connected nodes_and_responses =
@@ -193,7 +192,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let check_peer_connected_to_all_others ~nodes_by_peer_id ~peer_id
         ~connected_peers =
       let get_node_id p =
-        p |> String.Map.find_exn nodes_by_peer_id |> Engine.Network.Node.id
+        p |> String.Map.find_exn nodes_by_peer_id |> Network.Node.id
       in
       let expected_peers =
         nodes_by_peer_id |> String.Map.keys
@@ -239,8 +238,6 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
           "The network could be disconnected by removing %d node(s)" n
     | `Ok ->
         Malleable_error.return ()
-
-  open Inputs.Engine
 
   module Zkapp = struct
     let send_batch ~logger node zkapp_commands =

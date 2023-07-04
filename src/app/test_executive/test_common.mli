@@ -20,16 +20,16 @@ module Make : functor
        Integration_test_lib.Malleable_error.t
 
   module Wait_for : sig
+    (** [nodes_to_initialize dsl nodes] uses [dsl]'s wait condition to wait for [nodes] to initialize *)
+    val nodes_to_initialize :
+         Inputs.Dsl.t
+      -> Inputs.Engine.Network.Node.t list
+      -> unit Integration_test_lib.Malleable_error.t
+
     (** [all_nodes_to_initialize dsl network] uses [dsl]'s wait condition to wait for all nodes in the [network] to initialize *)
     val all_nodes_to_initialize :
          Inputs.Dsl.t
       -> Inputs.Engine.Network.t
-      -> unit Integration_test_lib.Malleable_error.t
-
-    (** [node_to_initialize dsl node] uses [dsl]'s wait condition to wait for [node] to initialize *)
-    val node_to_initialize :
-         Inputs.Dsl.t
-      -> Inputs.Engine.Network.Node.t
       -> unit Integration_test_lib.Malleable_error.t
 
     (** [blocks_to_be_produced dsl n] uses [dsl]'s wait condition to wait for [n] blocks *)
@@ -42,7 +42,7 @@ module Make : functor
       -> Inputs.Engine.Network.Node.t list
       -> unit Integration_test_lib.Malleable_error.t
 
-    (** TODO: [ledger_proofs_emitted_since_genesis ~test_config ~num_proofs]  *)
+    (** TODO: [ledger_proofs_emitted_since_genesis dsl ~test_config ~num_proofs]  *)
     val ledger_proofs_emitted_since_genesis :
          Inputs.Dsl.t
       -> test_config:Integration_test_lib.Test_config.t
@@ -80,6 +80,9 @@ module Make : functor
       -> soft_slots:int
       -> unit Integration_test_lib.Malleable_error.t
   end
+
+  (** [all_nodes network] returns the list of all nodes in the [network] *)
+  val all_nodes : Inputs.Engine.Network.t -> Inputs.Engine.Network.Node.t list
 
   (** [get_node network node_name] returns the node in the [network] with the given [node_name] *)
   val get_node :
