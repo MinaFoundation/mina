@@ -491,7 +491,7 @@ module Test = struct
    * implementation directly. *)
   module type Functor_intf = functor (Inputs : Inputs_intf) ->
     S
-      with type network = Inputs.Engine.Network.t
-       and type node = Inputs.Engine.Network.Node.t
-       and type dsl = Inputs.Dsl.t
+      with type network := Inputs.Engine.Network.t
+       and type node := Inputs.Engine.Network.Node.t
+       and type dsl := Inputs.Dsl.t
 end
