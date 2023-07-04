@@ -8,7 +8,6 @@ open Mina_transaction
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
   open Inputs
 
-  (* Call [f] [n] times in sequence *)
   let repeat_seq ~n ~f =
     let open Malleable_error.Let_syntax in
     let rec go n =
@@ -42,40 +41,61 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     go n []
 
-  let wait_for_payments ~logger ~dsl ~hashlist n =
-    let open Malleable_error.Let_syntax in
-    let rec go n hashlist =
-      if n = 0 then return ()
-      else
-        (* confirm payment *)
-        let%bind () =
-          let hash = List.hd_exn hashlist in
-          let%map () =
-            Dsl.wait_for dsl
-              (Dsl.Wait_condition.signed_command_to_be_included_in_frontier
-                 ~txn_hash:hash ~node_included_in:`Any_node )
-          in
-          [%log info]
-            "wait for multiple payments: payment #%d with hash %s successfully \
-             included in frontier."
-            n
-            (Transaction_hash.to_base58_check hash) ;
-          ()
-        in
-        go (n - 1) (List.tl_exn hashlist)
-    in
-    go n hashlist
+  module Wait_for = struct
+    let all_nodes_to_initialize network t =
+      Dsl.(
+        wait_for t
+        @@ Wait_condition.nodes_to_initialize
+             (Core.String.Map.data @@ Engine.Network.all_nodes network))
 
-  (* let pub_key_of_node node =
-     let open Signature_lib in
-     match Engine.Network.Node.network_keypair node with
-     | Some nk ->
-         Malleable_error.return (nk.keypair.public_key |> Public_key.compress)
-     | None ->
-         Malleable_error.hard_error_format
-           "Node '%s' did not have a network keypair, if node is a block \
-            producer this should not happen"
-           (Engine.Network.Node.id node) *)
+    let node_to_initialize t node =
+      Dsl.(wait_for t @@ Wait_condition.node_to_initialize node)
+
+    let payments_to_be_included_in_transition_frontier ~logger ~dsl ~hashlist n
+        =
+      let open Malleable_error.Let_syntax in
+      let rec go n hashlist =
+        if n = 0 then return ()
+        else
+          (* confirm payment *)
+          let%bind () =
+            let hash = List.hd_exn hashlist in
+            let%map () =
+              Dsl.(
+                wait_for dsl
+                @@ Wait_condition.signed_command_to_be_included_in_frontier
+                     ~txn_hash:hash ~node_included_in:`Any_node)
+            in
+            [%log info]
+              "wait for multiple payments: payment #%d with hash %s \
+               successfully included in frontier."
+              n
+              (Transaction_hash.to_base58_check hash) ;
+            ()
+          in
+          go (n - 1) (List.tl_exn hashlist)
+      in
+      go n hashlist
+
+    let blocks_to_be_produced dsl n =
+      Dsl.(wait_for dsl @@ Wait_condition.blocks_to_be_produced n)
+
+    let nodes_to_synchronize dsl nodes =
+      Dsl.(wait_for dsl @@ Wait_condition.nodes_to_synchronize nodes)
+
+    let with_timeouts dsl ~condition ~soft_timeout ~hard_timeout =
+      Dsl.(
+        wait_for dsl
+        @@ Wait_condition.with_timeouts ~soft_timeout ~hard_timeout condition)
+  end
+
+  let get_bp_node network node_name =
+    Core.String.Map.find_exn (Engine.Network.block_producers network) node_name
+
+  let get_genesis_keypair network account_name =
+    Core.String.Map.find_exn
+      (Engine.Network.genesis_keypairs network)
+      account_name
 
   let make_get_key ~f node =
     match Engine.Network.Node.network_keypair node with
@@ -311,21 +331,21 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
           ~metadata:[ ("error", `String err_str) ] ;
         Malleable_error.hard_error (Error.of_string err_str)
 
-  let get_pooled_zkapp_commands ~logger node pk =
-    [%log info] "Getting pooled zkApp commands"
-      ~metadata:
-        [ ("pub_key", Signature_lib.Public_key.Compressed.to_yojson pk) ] ;
-    match%bind.Deferred
-      Network.Node.get_pooled_zkapp_commands ~logger node ~pk
-    with
-    | Ok zkapp_commands ->
-        [%log info] "Got pooled zkApp commands" ;
-        Malleable_error.return zkapp_commands
-    | Error err ->
-        let err_str = Error.to_string_mach err in
-        [%log error] "Error getting pooled zkApp commands"
-          ~metadata:[ ("error", `String err_str) ] ;
-        Malleable_error.hard_error (Error.of_string err_str)
+  (* let get_pooled_zkapp_commands ~logger node ~pk =
+     [%log info] "Getting pooled zkApp commands"
+       ~metadata:
+         [ ("pub_key", Signature_lib.Public_key.Compressed.to_yojson pk) ] ;
+     match%bind.Deferred
+       Network.Node.get_pooled_zkapp_commands ~logger node ~pk
+     with
+     | Ok zkapp_commands ->
+         [%log info] "Got pooled zkApp commands" ;
+         Malleable_error.return zkapp_commands
+     | Error err ->
+         let err_str = Error.to_string_mach err in
+         [%log error] "Error getting pooled zkApp commands"
+           ~metadata:[ ("error", `String err_str) ] ;
+         Malleable_error.hard_error (Error.of_string err_str) *)
 
   let compatible_item req_item ledg_item ~equal =
     match (req_item, ledg_item) with
