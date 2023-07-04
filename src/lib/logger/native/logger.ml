@@ -312,7 +312,12 @@ end
 [%%versioned
 module Stable = struct
   module V1 = struct
-    type t = { null : bool; metadata : Metadata.Stable.V1.t; id : string }
+    type t =
+      { null : bool
+      ; metadata : Metadata.Stable.V1.t
+      ; id : string
+      ; prefix : string
+      }
 
     let to_latest = Fn.id
   end
@@ -320,15 +325,21 @@ end]
 
 let metadata t = t.metadata
 
-let create ?(metadata = []) ?(id = "default") () =
-  { null = false; metadata = Metadata.extend Metadata.empty metadata; id }
+let create ?(metadata = []) ?(id = "default") ?(prefix = "") () =
+  { null = false
+  ; metadata = Metadata.extend Metadata.empty metadata
+  ; id
+  ; prefix
+  }
 
-let null () = { null = true; metadata = Metadata.empty; id = "default" }
+let null () =
+  { null = true; metadata = Metadata.empty; id = "default"; prefix = "" }
 
 let extend t metadata =
   { t with metadata = Metadata.extend t.metadata metadata }
 
-let change_id { null; metadata; id = _ } ~id = { null; metadata; id }
+let change_id { null; metadata; id = _; prefix } ~id =
+  { null; metadata; id; prefix }
 
 let make_message (t : t) ~level ~module_ ~location ~metadata ~message ~event_id
     ~skip_merge_global_metadata =
@@ -345,7 +356,7 @@ let make_message (t : t) ~level ~module_ ~location ~metadata ~message ~event_id
   { Message.timestamp = Time.now ()
   ; level
   ; source = Some (Source.create ~module_ ~location)
-  ; message
+  ; message = t.prefix ^ message
   ; metadata =
       ( if skip_merge_global_metadata then
         Metadata.extend Metadata.empty metadata
