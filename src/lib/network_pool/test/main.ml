@@ -42,4 +42,9 @@ let () =
                account's balance can't support them anymore"
               `Quick transaction_replacement_insufficient_balance
           ] )
+    ; Add_from_gossip_test.
+        ( "add from gossip"
+        , [ test_case "Adding from gossip updates reserved currency" `Quick
+              add_from_gossip_reserves_proper_amount_of_currency
+          ] )
     ]

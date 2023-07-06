@@ -78,6 +78,7 @@
    genesis_ledger
    staged_ledger_diff
    mina_wire_types
+   monad_lib
  )
  (preprocessor_deps "../../config.mlh")
  (instrumentation (backend bisect_ppx))
