@@ -251,17 +251,12 @@ let main inputs =
   let (module Test) = inputs.test in
   let test_name = test_name inputs.test (module Test_inputs) in
   let module T = Test (Test_inputs) in
-  (*
-    (module Test (Test_inputs)
-    : Intf.Test.S
-      with type network = Engine.Network.t
-       and type log_engine = Engine.Log_engine.t )
-    *)
   (* TODO:
    *   let (module Exec) = (module Execute.Make (Engine)) in
    *   Exec.execute ~logger ~engine_cli_inputs ~images (module Test (Engine))
    *)
   let logger = Logger.create () in
+  (* FIXME: we need these to not default to {mina, coda}protocol stuff...  *)
   let images =
     { Test_config.Container_images.mina = inputs.mina_image
     ; archive_node =
@@ -359,7 +354,7 @@ let main inputs =
         [%log trace] "initializing network abstraction" ;
         let%bind () = Engine.Network.initialize_infra ~logger network in
 
-        [%log info] "Starting the daemons within the pods" ;
+        [%log info] "starting the daemons within the pods" ;
         let start_print (node : Engine.Network.Node.t) =
           let open Malleable_error.Let_syntax in
           [%log info] "starting %s ..." (Engine.Network.Node.id node) ;

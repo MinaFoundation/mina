@@ -199,10 +199,10 @@ module Engine = struct
         -> pk:Signature_lib.Public_key.Compressed.t
         -> string list Deferred.Or_error.t
 
-      val get_peer_id :
+      val get_peer_ids :
         logger:Logger.t -> t -> (string * string list) Deferred.Or_error.t
 
-      val must_get_peer_id :
+      val must_get_peer_ids :
         logger:Logger.t -> t -> (string * string list) Malleable_error.t
 
       val get_best_chain :
@@ -466,6 +466,7 @@ module Dsl = struct
   end
 end
 
+(* integration tests implement Test.Funtor_intf *)
 module Test = struct
   module type Inputs_intf = sig
     module Engine : Engine.S
@@ -473,6 +474,7 @@ module Test = struct
     module Dsl : Dsl.S with module Engine := Engine
   end
 
+  (* signature for each test *)
   module type S = sig
     type network
 
@@ -487,8 +489,7 @@ module Test = struct
     val run : network -> dsl -> unit Malleable_error.t
   end
 
-  (* NB: until the DSL is actually implemented, a test just takes in the engine
-   * implementation directly. *)
+  (* functor to create the signature for each test *)
   module type Functor_intf = functor (Inputs : Inputs_intf) ->
     S
       with type network := Inputs.Engine.Network.t

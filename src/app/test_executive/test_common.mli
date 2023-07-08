@@ -175,7 +175,7 @@ module Make : functor
        (Inputs.Engine.Network.Node.t * (string * string list)) list
     -> unit Integration_test_lib.Malleable_error.t
 
-  (** TODO: [assert_peers_cant_be_partitioned ~max_disconnection nodes_and_responses]*)
+  (** TODO: [assert_peers_cant_be_partitioned ~max_disconnections nodes_and_responses]*)
   val assert_peers_cant_be_partitioned :
        max_disconnections:int
     -> (_ * (string * string list)) list

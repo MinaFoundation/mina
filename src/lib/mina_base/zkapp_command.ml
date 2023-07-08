@@ -1615,7 +1615,7 @@ end = struct
             :: acc )
       | ( []
           :: ({ authorization = Proof _ as a1; _ } :: zkapp_command)
-             :: zkapp_commands
+          :: zkapp_commands
         , [ _ ] :: (before :: (after :: _ as stmts)) :: stmtss ) ->
           (* This account_update is part of a new transaction, and contains a proof, don't
              pair it with other account updates.
@@ -1627,7 +1627,7 @@ end = struct
                 ~spec:(zkapp_segment_of_controls [ a1 ])
                 ~before ~after
             :: acc )
-      | ( ({ authorization = a1; _ }
+      | ( ( { authorization = a1; _ }
           :: ({ authorization = Proof _; _ } :: _ as zkapp_command) )
           :: zkapp_commands
         , (before :: (after :: _ as stmts)) :: stmtss ) ->
@@ -1652,9 +1652,9 @@ end = struct
                 ~spec:(zkapp_segment_of_controls [ a1 ])
                 ~before ~after
             :: acc )
-      | ( ({ authorization = (Signature _ | None_given) as a1; _ }
+      | ( ( { authorization = (Signature _ | None_given) as a1; _ }
           :: { authorization = (Signature _ | None_given) as a2; _ }
-             :: zkapp_command )
+          :: zkapp_command )
           :: zkapp_commands
         , (before :: _ :: (after :: _ as stmts)) :: stmtss ) ->
           (* The next two zkapp_command do not contain proofs, and are within the same
@@ -1670,9 +1670,9 @@ end = struct
                 ~before ~after
             :: acc )
       | ( []
-          :: ({ authorization = a1; _ }
+          :: ( { authorization = a1; _ }
              :: ({ authorization = Proof _; _ } :: _ as zkapp_command) )
-             :: zkapp_commands
+          :: zkapp_commands
         , [ _ ] :: (before :: (after :: _ as stmts)) :: stmtss ) ->
           (* This account_update is in the next transaction, and the next account_update contains a
              proof, don't pair it with this account_update.
@@ -1685,10 +1685,10 @@ end = struct
                 ~before ~after
             :: acc )
       | ( []
-          :: ({ authorization = (Signature _ | None_given) as a1; _ }
+          :: ( { authorization = (Signature _ | None_given) as a1; _ }
              :: { authorization = (Signature _ | None_given) as a2; _ }
-                :: zkapp_command )
-             :: zkapp_commands
+             :: zkapp_command )
+          :: zkapp_commands
         , [ _ ] :: (before :: _ :: (after :: _ as stmts)) :: stmtss ) ->
           (* The next two zkapp_command do not contain proofs, and are within the same
              new transaction. Pair them.
@@ -1703,9 +1703,9 @@ end = struct
                 ~before ~after
             :: acc )
       | ( [ { authorization = (Signature _ | None_given) as a1; _ } ]
-          :: ({ authorization = (Signature _ | None_given) as a2; _ }
+          :: ( { authorization = (Signature _ | None_given) as a2; _ }
              :: zkapp_command )
-             :: zkapp_commands
+          :: zkapp_commands
         , (before :: _after1) :: (_before2 :: (after :: _ as stmts)) :: stmtss )
         ->
           (* The next two zkapp_command do not contain proofs, and the second is within
@@ -1722,7 +1722,7 @@ end = struct
             :: acc )
       | ( []
           :: ({ authorization = a1; _ } :: zkapp_command)
-             :: (({ authorization = Proof _; _ } :: _) :: _ as zkapp_commands)
+          :: (({ authorization = Proof _; _ } :: _) :: _ as zkapp_commands)
         , [ _ ] :: (before :: ([ after ] as stmts)) :: (_ :: _ as stmtss) ) ->
           (* The next transaction contains a proof, and this account_update is in a new
              transaction, don't pair it with the next account_update.
@@ -1736,12 +1736,13 @@ end = struct
             :: acc )
       | ( []
           :: [ { authorization = (Signature _ | None_given) as a1; _ } ]
-             :: ({ authorization = (Signature _ | None_given) as a2; _ }
-                :: zkapp_command )
-                :: zkapp_commands
+          :: ( { authorization = (Signature _ | None_given) as a2; _ }
+             :: zkapp_command )
+          :: zkapp_commands
         , [ _ ]
           :: [ before; _after1 ]
-             :: (_before2 :: (after :: _ as stmts)) :: stmtss ) ->
+          :: (_before2 :: (after :: _ as stmts))
+          :: stmtss ) ->
           (* The next two zkapp_command do not contain proofs, the first is within a
              new transaction, and the second is within another new transaction.
              Pair them.

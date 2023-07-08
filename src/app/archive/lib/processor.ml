@@ -167,8 +167,7 @@ module Voting_for = struct
 
   let add_if_doesn't_exist (module Conn : CONNECTION) voting_for =
     Mina_caqti.select_insert_into_cols ~select:("id", Caqti_type.int)
-      ~table_name
-      ~cols:([ "value" ], typ)
+      ~table_name ~cols:([ "value" ], typ)
       (module Conn)
       (State_hash.to_base58_check voting_for)
 
@@ -188,8 +187,7 @@ module Token_symbols = struct
 
   let add_if_doesn't_exist (module Conn : CONNECTION) token_symbol =
     Mina_caqti.select_insert_into_cols ~select:("id", Caqti_type.int)
-      ~table_name
-      ~cols:([ "value" ], typ)
+      ~table_name ~cols:([ "value" ], typ)
       (module Conn)
       token_symbol
 
@@ -490,8 +488,7 @@ module Zkapp_verification_key_hashes = struct
   let add_if_doesn't_exist (module Conn : CONNECTION)
       (verification_key_hash : Pickles.Backend.Tick.Field.t) =
     Mina_caqti.select_insert_into_cols ~select:("id", Caqti_type.int)
-      ~table_name
-      ~cols:([ "value" ], typ)
+      ~table_name ~cols:([ "value" ], typ)
       (module Conn)
       (Pickles.Backend.Tick.Field.to_string verification_key_hash)
 
@@ -694,8 +691,7 @@ module Zkapp_uri = struct
 
   let add_if_doesn't_exist (module Conn : CONNECTION) zkapp_uri =
     Mina_caqti.select_insert_into_cols ~select:("id", Caqti_type.int)
-      ~table_name
-      ~cols:([ "value" ], typ)
+      ~table_name ~cols:([ "value" ], typ)
       (module Conn)
       zkapp_uri
 

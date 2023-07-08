@@ -3766,7 +3766,7 @@ module Make_str (A : Wire_types.Concrete) = struct
                    , `Pending_coinbase_of_statement
                        pending_coinbase_stack_state2
                    , zkapp_command2 )
-                   :: rest ->
+                :: rest ->
                   let commitment', full_commitment' =
                     mk_next_commitments zkapp_command2.account_updates
                   in

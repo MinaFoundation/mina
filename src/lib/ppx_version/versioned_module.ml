@@ -1458,16 +1458,16 @@ let convert_rpc_version (stri : structure_item) =
       match pmb_expr with
       | { pmod_desc =
             Pmod_structure
-              (( { pstr_desc =
-                     Pstr_module
-                       ( { pmb_name = { txt = Some "T"; _ }
-                         ; pmb_expr =
-                             { pmod_desc = Pmod_structure str_items; _ } as
-                             inner_mod_expr
-                         ; _
-                         } as inner_mod_binding )
-                 ; _
-                 } as inner_str_item )
+              ( ( { pstr_desc =
+                      Pstr_module
+                        ( { pmb_name = { txt = Some "T"; _ }
+                          ; pmb_expr =
+                              { pmod_desc = Pmod_structure str_items; _ } as
+                              inner_mod_expr
+                          ; _
+                          } as inner_mod_binding )
+                  ; _
+                  } as inner_str_item )
               :: other_mods )
         ; _
         } as mod_expr ->
