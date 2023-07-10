@@ -145,11 +145,15 @@ module For_tests = struct
     [%test_eq: Set.t] all_by_hash all_txns ;
     [%test_eq: Set.t] all_by_sender all_txns ;
     [%test_eq: Set.t] all_by_fee all_txns ;
-    [%test_eq: Set.t]
-      ( Account_id.Map.data pool.all_by_sender
-      |> List.map ~f:(fun (cmds, _) -> F_sequence.head_exn cmds)
-      |> Set.of_list )
-      applicable_by_fee ;
+    (* The set of applicable transactions is a subset of the set of transactions
+       at the heads of each account's queue. Note that some of the transactions
+       in the latter may not be immediately applicable due to a nonce gap. *)
+    [%test_pred: Set.t * Set.t]
+      Set.(fun (queue_heads, applicables) -> is_subset ~of_:queue_heads applicables)
+      ( ( Account_id.Map.data pool.all_by_sender
+          |> List.map ~f:(fun (cmds, _) -> F_sequence.head_exn cmds)
+          |> Set.of_list )
+      , applicable_by_fee ) ;
     (* In each sender's queue nonces should be strictly increasing and the
        reserved currency should be equal to the sum of amounts and fees of
        all the commands in the queue. *)
@@ -903,7 +907,6 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
     let%bind consumed =
       M.of_result
         Result.Let_syntax.(
-          (* C5 *)
           let%bind () = check_expiry config unchecked in
           let%bind consumed =
             currency_consumed' ~constraint_constants unchecked
@@ -916,7 +919,9 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
           in
           consumed)
     in
-    (* C4 *)
+    let add_to_applicable_by_fee =
+      Account_nonce.equal cmd_applicable_at_nonce current_nonce
+    in
     match !by_sender.data with
     | None ->
         let%bind () =
@@ -930,20 +935,18 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
                     (Invalid_nonce
                        ( `Between (current_nonce, Account_nonce.max_value)
                        , cmd_applicable_at_nonce ) )
-                (* C1/1a *)
               in
               let%map () =
                 Result.ok_if_true
                   Currency.Amount.(consumed <= balance)
                   ~error:(Insufficient_funds (`Balance balance, consumed))
-                (* C2 *)
               in
               ())
         in
         let%map () =
           M.write
             (Update.Add
-               { command = cmd; fee_per_wu; add_to_applicable_by_fee = true } )
+               { command = cmd; fee_per_wu; add_to_applicable_by_fee } )
         in
         by_sender :=
           { !by_sender with data = Some (F_sequence.singleton cmd, consumed) } ;
@@ -964,9 +967,6 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
             Add_from_gossip.insert_into_queue ~balance cmd queued_cmds)
         in
         let new_state = (queue, required_balance) in
-        let add_to_applicable_by_fee =
-          Account_nonce.equal cmd_applicable_at_nonce current_nonce
-        in
         let%bind () =
           match F_sequence.uncons dropped with
           | None ->

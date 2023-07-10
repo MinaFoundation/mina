@@ -17,6 +17,12 @@ open Indexed_pool
 open For_tests
 open Transaction_gen
 
+type cmd = Transaction_hash.User_command_with_valid_signature.t
+[@@deriving sexp, compare]
+
+type cmd_set = Transaction_hash.User_command_with_valid_signature.Set.t
+[@@deriving sexp, compare]
+
 let logger = Logger.null ()
 
 let time_controller = Block_time.Controller.basic ~logger
@@ -241,6 +247,8 @@ let replacement () =
       modify_payment replace_cmd_skeleton ~sender ~body:Fn.id ~common:(fun c ->
           { c with fee = Fee.of_mina_int_exn (10 + (5 * (size + 1))) } )
     in
+    Printf.printf "fee: %s\n"
+      (Fee.to_mina_string @@ Sender_queue.cmd_fee replace_cmd) ;
     (init_nonce, init_balance, setup_cmds, replace_cmd)
   in
   Quickcheck.test ~trials:20 gen
@@ -807,7 +815,8 @@ let update_fee (txn : Signed_command.t) fee =
   }
 
 (* Generate a sequence of transactions, then choose one of them and replace
-   it with the same transaction, just with a higher fee. *)
+   it with the same transaction, just with a higher fee. Make sure it doesn't
+   invalidate any other transaction in the pool. *)
 let transaction_replacement () =
   Quickcheck.test
     (let open Quickcheck in
@@ -843,33 +852,14 @@ let transaction_replacement () =
       let balance =
         Balance.to_amount sender.balance |> Amount.(add one) |> Option.value_exn
       in
-      let _, pool', _ =
+      let _, pool', dropped =
         Indexed_pool.add_from_gossip_exn pool t sender.nonce balance
         |> Result.map_error ~f:(fun e ->
                Sexp.to_string @@ Command_error.sexp_of_t e )
         |> Result.ok_or_failwith
       in
       assert_pool_consistency pool ;
-      let queue, _ =
-        let open Account.Poly in
-        Public_key.decompress sender.public_key
-        |> Option.value_exn |> Account_id.of_public_key
-        |> Account_id.Map.find_exn (Indexed_pool.For_tests.all_by_sender pool')
-      in
-      let eq = Transaction_hash.User_command_with_valid_signature.equal in
-      let repl =
-        Signed_command replacement
-        |> Transaction_hash.User_command_with_valid_signature.create
-      in
-      List.iteri (F_sequence.to_list queue) ~f:(fun i txn ->
-          [%test_pred: Transaction_hash.User_command_with_valid_signature.t]
-            (fun t ->
-              let ith =
-                Signed_command (List.nth_exn txns i)
-                |> Transaction_hash.User_command_with_valid_signature.create
-              in
-              eq t ith || eq t repl )
-            txn ) ;
+      [%test_eq: int] (Sequence.length dropped) 1 ;
       [%test_eq: int] (Indexed_pool.size pool) (Indexed_pool.size pool') ;
       [%test_eq: int]
         (Indexed_pool.transactions ~logger pool |> Sequence.length)
@@ -930,14 +920,50 @@ let transaction_replacement_insufficient_balance () =
         |> Transaction_hash.User_command_with_valid_signature.create
       in
       let balance = Balance.to_amount sender.balance in
-      let _, pool', _ =
+      let _, pool', dropped =
         Indexed_pool.add_from_gossip_exn pool t sender.nonce balance
         |> Result.map_error ~f:(fun e ->
                Sexp.to_string @@ Command_error.sexp_of_t e )
         |> Result.ok_or_failwith
       in
+      Printf.printf "txns: %s\n" (Indexed_pool.sexp_of_t pool' |> Sexp.to_string) ;
       (* The last transaction gets discarded, because after the replacement,
          the account can't afford it anymore. *)
       assert_pool_consistency pool ;
       [%test_eq: int] (Indexed_pool.size pool) 3 ;
-      [%test_eq: int] (Indexed_pool.size pool') 2 )
+      [%test_eq: int] (Indexed_pool.size pool') 2 ;
+      (* The replaced commands and the discarded one. *)
+      [%test_eq: int] (Sequence.length dropped) 2 )
+
+let compare_by_nonce cmd1 cmd2 =
+  let nonce c =
+    let unchecked = Signed_command.forget_check c in
+    User_command.applicable_at_nonce (Signed_command unchecked)
+  in
+  Account_nonce.compare (nonce cmd1) (nonce cmd2)
+
+let commands_can_come_out_of_order () =
+  Quickcheck.test
+    (let open Quickcheck.Generator.Let_syntax in
+    let%bind sender = Account.gen in
+    let%bind receiver = Account.gen in
+    let%bind txns =
+      Stateful_gen.eval_state
+        (gen_txns_from_single_sender_to receiver.public_key)
+        sender
+    in
+    let%map shuffled = Quickcheck_lib.shuffle txns in
+    (sender, shuffled))
+    ~sexp_of:[%sexp_of: Account.t * Signed_command.With_valid_signature.t list]
+    ~f:(fun (sender, txns) ->
+      let account_map = accounts_map [ sender ] in
+      let pool = pool_of_transactions ~account_map ~init:empty txns in
+      (* All the transactions make their way into the pool. *)
+      [%test_eq: int] (List.length txns) (Indexed_pool.size pool) ;
+      [%test_eq: Transaction_hash.User_command_with_valid_signature.t list]
+        ( List.sort ~compare:compare_by_nonce txns
+        |> List.map ~f:(fun c ->
+               Transaction_hash.User_command_with_valid_signature.create
+                 (Signed_command c) ) )
+        (Indexed_pool.transactions ~logger pool |> Sequence.to_list) )
+

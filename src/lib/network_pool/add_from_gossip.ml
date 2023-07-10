@@ -224,8 +224,11 @@ module State = struct
             let%map state = self#transition ~replaced:cmd () in
             (state#append to_insert :> t)
         | _ ->
-            let%map state = self#transition () in
-            ((state#append to_insert)#append cmd :> t)
+            let%bind state = self#transition () in
+            let%bind consumed = consumed_currency cmd in
+            let%bind state' = state#add_required_balance consumed in
+            let%map () = state'#assert_balance in
+            ((state'#append to_insert)#append cmd :> t)
 
       method finalize : (insertion_result, Command_error.t) Result.t =
         let open Result.Let_syntax in

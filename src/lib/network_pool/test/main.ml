@@ -41,6 +41,8 @@ let () =
               "After a replacement, later transactions are discarded, if  \
                account's balance can't support them anymore"
               `Quick transaction_replacement_insufficient_balance
+          ; test_case "Commands can come out of order" `Quick
+              commands_can_come_out_of_order
           ] )
     ; Add_from_gossip_test.
         ( "add from gossip"
