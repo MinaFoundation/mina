@@ -149,10 +149,11 @@ module For_tests = struct
        at the heads of each account's queue. Note that some of the transactions
        in the latter may not be immediately applicable due to a nonce gap. *)
     [%test_pred: Set.t * Set.t]
-      Set.(fun (queue_heads, applicables) -> is_subset ~of_:queue_heads applicables)
-      ( ( Account_id.Map.data pool.all_by_sender
-          |> List.map ~f:(fun (cmds, _) -> F_sequence.head_exn cmds)
-          |> Set.of_list )
+      Set.(
+        fun (queue_heads, applicables) -> is_subset ~of_:queue_heads applicables)
+      ( Account_id.Map.data pool.all_by_sender
+        |> List.map ~f:(fun (cmds, _) -> F_sequence.head_exn cmds)
+        |> Set.of_list
       , applicable_by_fee ) ;
     (* In each sender's queue nonces should be strictly increasing and the
        reserved currency should be equal to the sum of amounts and fees of
@@ -470,7 +471,7 @@ module Update = struct
     | Remove_from_applicable_by_fee { fee_per_wu; command } ->
         { acc with
           applicable_by_fee =
-            Map_set.remove_exn acc.applicable_by_fee fee_per_wu command
+            Map_set.remove acc.applicable_by_fee fee_per_wu command
         }
 
   let apply (us : t) t = Writer_result.Tree.fold ~init:t us ~f:apply
@@ -945,8 +946,7 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
         in
         let%map () =
           M.write
-            (Update.Add
-               { command = cmd; fee_per_wu; add_to_applicable_by_fee } )
+            (Update.Add { command = cmd; fee_per_wu; add_to_applicable_by_fee })
         in
         by_sender :=
           { !by_sender with data = Some (F_sequence.singleton cmd, consumed) } ;

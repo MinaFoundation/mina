@@ -967,3 +967,70 @@ let commands_can_come_out_of_order () =
                  (Signed_command c) ) )
         (Indexed_pool.transactions ~logger pool |> Sequence.to_list) )
 
+let cmds_with_nonce_gaps_are_first_to_be_dropped () =
+  Quickcheck.test
+    (let open Quickcheck.Generator.Let_syntax in
+    let module Gen_ext = Monad_lib.Make_ext (Quickcheck.Generator) in
+    let%bind senders = List.gen_non_empty Account.gen in
+    let%bind receiver = Account.gen in
+    let%bind txns =
+      List.map senders
+        ~f:
+          (Stateful_gen.eval_state
+             (gen_txns_from_single_sender_to receiver.public_key) )
+      |> Gen_ext.sequence
+    in
+    let%bind app_count = Int.gen_incl 0 (List.length txns - 1) in
+    let%map shuffled = Quickcheck_lib.shuffle @@ List.join txns in
+    (* Drop some transactions in order to create persisting nonce gaps. *)
+    (accounts_map senders, List.take shuffled app_count))
+    ~sexp_of:
+      [%sexp_of:
+        Account.t Public_key.Compressed.Map.t
+        * Signed_command.With_valid_signature.t list]
+    ~f:(fun (account_map, txns) ->
+      let pool = pool_of_transactions ~account_map ~init:empty txns in
+      assert_pool_consistency pool ;
+      let all_by_nonce_gap =
+        Map.fold (Indexed_pool.For_tests.all_by_sender pool)
+          ~init:Block_producer_value.Map.empty
+          ~f:(fun ~key ~data:(queue, _) acc ->
+            let account =
+              Map.find_exn account_map (Account_id.public_key key)
+            in
+            let _, _, acc' =
+              F_sequence.foldl
+                (fun (last_nonce, current_gap, acc) cmd ->
+                  let nonce = Sender_queue.cmd_nonce cmd in
+                  let nonce_gap =
+                    let open Account_nonce in
+                    sub nonce last_nonce |> Option.value ~default:zero
+                    |> Fn.flip sub one |> Option.value ~default:zero
+                    |> add current_gap
+                  in
+                  ( nonce
+                  , nonce_gap
+                  , Map_set.insert
+                      (module Transaction_hash.User_command_with_valid_signature)
+                      acc
+                      (Block_producer_value.of_transaction ~nonce_gap cmd)
+                      cmd ) )
+                (account.nonce, Account_nonce.zero, acc)
+                queue
+            in
+            acc' )
+      in
+      let dropped, pool' = Indexed_pool.remove_lowest_fee pool in
+      assert_pool_consistency pool' ;
+      let highest_gap =
+        Option.map ~f:snd @@ Block_producer_value.Map.max_elt all_by_nonce_gap
+      in
+      match (highest_gap, Option.map ~f:fst @@ Sequence.next dropped) with
+      | None, None ->
+          () (* Pool is empty, so nothing was dropped. *)
+      | Some set, Some dropped ->
+          [%test_pred: cmd_set * cmd] (Tuple2.uncurry Set.mem) (set, dropped)
+      | Some _, None ->
+          failwith "Nothing dropped from a non-empty pool!"
+      | None, Some _ ->
+          failwith "Dropped from a seemingly empty pool!" )

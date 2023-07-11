@@ -43,6 +43,8 @@ let () =
               `Quick transaction_replacement_insufficient_balance
           ; test_case "Commands can come out of order" `Quick
               commands_can_come_out_of_order
+          ; test_case "Commands with nonce gaps are being dropped first" `Quick
+              cmds_with_nonce_gaps_are_first_to_be_dropped
           ] )
     ; Add_from_gossip_test.
         ( "add from gossip"
