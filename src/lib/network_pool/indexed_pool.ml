@@ -964,7 +964,7 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
                      , cmd_applicable_at_nonce ) )
                 Account_nonce.(cmd_applicable_at_nonce >= current_nonce)
             in
-            Add_from_gossip.insert_into_queue ~balance cmd queued_cmds)
+            Sender_queue.insert_into_queue ~balance cmd queued_cmds)
         in
         let new_state = (queue, required_balance) in
         let%bind () =
@@ -978,7 +978,7 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
               in
               if
                 Account_nonce.(
-                  Add_from_gossip.cmd_nonce replaced = current_nonce)
+                  Sender_queue.cmd_nonce replaced = current_nonce)
               then
                 let fee_per_wu =
                   Transaction_hash.User_command.of_checked replaced

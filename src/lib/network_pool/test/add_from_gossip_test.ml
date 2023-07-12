@@ -12,7 +12,7 @@ open Mina_base
 open Mina_transaction
 open Network_pool
 open Transaction_gen
-open Add_from_gossip
+open Sender_queue
 
 let currency_consumed =
   Indexed_pool.For_tests.currency_consumed ~constraint_constants
@@ -42,7 +42,7 @@ let add_from_gossip_reserves_proper_amount_of_currency () =
           ~f:(fun (queue, reserved_currency) txn ->
             let open Result.Let_syntax in
             let%bind { queue; dropped; required_balance } =
-              Add_from_gossip.insert_into_queue ~balance txn queue
+              insert_into_queue ~balance txn queue
             in
             Result.of_option ~error:Command_error.Overflow
             @@
