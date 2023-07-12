@@ -9,6 +9,7 @@
 open Core_kernel
 open Currency
 open Mina_base
+open Mina_numbers
 open Mina_transaction
 open Network_pool
 open Transaction_gen
@@ -41,8 +42,8 @@ let add_from_gossip_reserves_proper_amount_of_currency () =
           ~init:(F_sequence.empty, Amount.zero)
           ~f:(fun (queue, reserved_currency) txn ->
             let open Result.Let_syntax in
-            let%bind { queue; dropped; required_balance } =
-              insert_into_queue ~balance txn queue
+            let%bind { queue; dropped; required_balance; nonce_gap } =
+              insert_into_queue ~balance ~current_nonce:sender.nonce txn queue
             in
             Result.of_option ~error:Command_error.Overflow
             @@
@@ -60,6 +61,8 @@ let add_from_gossip_reserves_proper_amount_of_currency () =
             let%map reserve_minus_dropped =
               sub reserve_plus_consumed dropped_balance
             in
+            (* Commands are inserted in order, no gaps. *)
+            [%test_eq: Account_nonce.t] nonce_gap Unsigned.UInt32.zero ;
             [%test_eq: Amount.t] reserve_minus_dropped required_balance ;
             (queue, required_balance) )
       in

@@ -1,6 +1,7 @@
 open Core
 open Currency
 open Mina_base
+open Mina_numbers
 open Mina_transaction
 open Unsigned
 
@@ -58,6 +59,15 @@ let of_transaction ~nonce_gap
   ; weight = User_command.weight unchecked
   ; nonce_gap
   }
+
+let of_transaction_queue_empty ~account t =
+  let open Account.Poly in
+  let nonce_gap = 
+    Sender_queue.cmd_nonce t
+    |> Fn.flip Account_nonce.sub account.nonce
+    |> Option.value_map ~default:UInt32.zero ~f:Account_nonce.to_uint32
+  in
+  of_transaction ~nonce_gap t
 
 let is_applicable { nonce_gap; _ } = UInt32.(equal nonce_gap zero)
 

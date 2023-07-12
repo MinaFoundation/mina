@@ -1,5 +1,6 @@
 open Core
 open Mina_base
+open Mina_numbers
 open Mina_transaction
 open Currency
 
@@ -9,6 +10,7 @@ type insertion_result =
   { queue : cmd F_sequence.t
   ; dropped : cmd F_sequence.t
   ; required_balance : Currency.Amount.t
+  ; nonce_gap : Unsigned.UInt32.t
   }
 
 (* These state constructors are revealed for testing purposes.
@@ -22,10 +24,11 @@ module State : sig
     ; required_balance : Amount.t
     ; required_fee : Fee.t option >
 
-  val initial : balance:Amount.t -> cmd -> t
+  val initial : balance:Amount.t -> current_nonce:Account_nonce.t -> cmd -> t
 
   val inserted :
        balance:Amount.t
+    -> nonce_gap:Unsigned.UInt32.t
     -> ?required_balance:Amount.t
     -> ?replaced:cmd
     -> fee:Fee.t
@@ -34,6 +37,7 @@ module State : sig
 
   val dropping :
        ?dropped:cmd F_sequence.t
+    -> nonce_gap:Unsigned.UInt32.t
     -> required_balance:Amount.t
     -> ?required_fee:Fee.t
     -> fee:Fee.t
@@ -47,6 +51,7 @@ val cmd_fee : cmd -> Fee.t
 
 val insert_into_queue :
      balance:Amount.t
+  -> current_nonce:Account_nonce.t
   -> cmd
   -> cmd F_sequence.t
   -> (insertion_result, Command_error.t) Result.t

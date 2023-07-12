@@ -3,6 +3,7 @@ open Currency
 open Mina_base
 open Mina_numbers
 open Mina_transaction
+open Unsigned
 
 type cmd = Transaction_hash.User_command_with_valid_signature.t
 
@@ -10,6 +11,7 @@ type insertion_result =
   { queue : cmd F_sequence.t
   ; dropped : cmd F_sequence.t
   ; required_balance : Amount.t
+  ; nonce_gap : UInt32.t
   }
 
 let unless_overflows = Result.of_option ~error:Command_error.Overflow
@@ -121,9 +123,44 @@ module State = struct
             Result.return ()
     end
 
-  class dropping ?(dropped = F_sequence.empty) ~required_balance ?required_fee
-    ~fee q =
+  class nonce_tracker account_nonce =
     object (self)
+      val last_nonce : Account_nonce.t = account_nonce
+
+      val nonce_gap : UInt32.t = UInt32.zero
+
+      val first_command_checked : bool = false
+  
+      method current_nonce_gap = nonce_gap
+
+      (* Computing the nonce gap is complicated by the fact that the first
+         command in the queue is expected to have the nonce EQUAL to the
+         account nonce (difference should be zero), but each subsequent
+         command is expected to have a nonce GREATER by 1. That difference of
+         1 is then NOT considered a gap. *)
+      method set_initial_nonce_gap cmd =
+        let open Result.Let_syntax in
+        let nonce = cmd_nonce cmd in
+        let%map gap = unless_overflows (Account_nonce.sub nonce last_nonce) in
+        {< last_nonce = nonce
+         ; nonce_gap = UInt32.add nonce_gap gap
+         ; first_command_checked = true >}
+
+      method set_nonce_gap cmd =
+        let open Result.Let_syntax in
+        let nonce = cmd_nonce cmd in
+        let%map gap = unless_overflows (Account_nonce.sub nonce last_nonce) in
+        let gap' = UInt32.sub gap UInt32.one in
+        {< last_nonce = nonce; nonce_gap = UInt32.add nonce_gap gap' >}
+
+      method update_nonce_gap cmd =
+        if first_command_checked then self#set_nonce_gap cmd
+        else self#set_initial_nonce_gap cmd
+    end
+
+  class dropping ?(dropped = F_sequence.empty) ~nonce_gap ~required_balance ?required_fee
+    ~fee q =
+     object (self)
       inherit queue q
 
       inherit replacement_fee_tracker ?required_fee fee
@@ -131,6 +168,8 @@ module State = struct
       val dropped : cmd F_sequence.t = dropped
 
       val required_balance : Amount.t = required_balance
+
+      val nonce_gap : UInt32.t = nonce_gap
 
       method required_balance = required_balance
 
@@ -148,10 +187,10 @@ module State = struct
       method finalize : (insertion_result, Command_error.t) Result.t =
         let open Result.Let_syntax in
         let%map () = self#assert_required_fee in
-        { queue = q; dropped; required_balance }
+        { queue = q; dropped; required_balance; nonce_gap }
     end
 
-  class inserted ~balance ?required_balance ?replaced ~fee q =
+  class inserted ~nonce_gap ~balance ?required_balance ?replaced ~fee q =
     object (self)
       inherit queue q
 
@@ -161,6 +200,8 @@ module State = struct
         replacement_fee_tracker
           ?required_fee:Option.(map ~f:cmd_fee replaced)
           fee
+
+      val nonce_gap : UInt32.t = nonce_gap
 
       method dropped =
         Option.value_map ~default:F_sequence.empty ~f:F_sequence.singleton
@@ -174,6 +215,7 @@ module State = struct
         else
           let state =
             new dropping
+              ~nonce_gap
               ~dropped:updated#dropped
                 (* Don't update the required balance, because we're dropping the current command. *)
               ~required_balance ?required_fee:updated#required_fee ~fee q
@@ -183,14 +225,16 @@ module State = struct
       method finalize : (insertion_result, Command_error.t) Result.t =
         let open Result.Let_syntax in
         let%map () = self#assert_required_fee in
-        { queue = q; dropped = self#dropped; required_balance }
+        { queue = q; dropped = self#dropped; required_balance; nonce_gap }
     end
 
-  class initial ~balance to_insert =
+  class initial ~balance ~account_nonce to_insert =
     object (self)
       inherit queue F_sequence.empty
 
       inherit balance_tracker balance
+
+      inherit nonce_tracker account_nonce
 
       val nonce : Account_nonce.t = cmd_nonce to_insert
 
@@ -204,6 +248,7 @@ module State = struct
         let open Result.Let_syntax in
         let state =
           new inserted
+            ~nonce_gap
             ~balance:available_balance ~required_balance
             ~fee:(cmd_fee to_insert) ?replaced q
         in
@@ -218,38 +263,44 @@ module State = struct
         | -1 ->
             let%bind consumed = consumed_currency cmd in
             let%bind updated = self#add_required_balance consumed in
-            let%map () = updated#assert_balance in
-            (updated#append cmd :> t)
+            let%bind () = updated#assert_balance in
+            let%map updated' = updated#update_nonce_gap cmd in
+            (updated'#append cmd :> t)
         | 0 ->
-            let%map state = self#transition ~replaced:cmd () in
-            (state#append to_insert :> t)
+            let%bind state = self#update_nonce_gap to_insert in
+            let%map state' = state#transition ~replaced:cmd () in
+            (state'#append to_insert :> t)
         | _ ->
-            let%bind state = self#transition () in
+            let%bind state = self#update_nonce_gap to_insert in
+            let%bind state' = state#transition () in
             let%bind consumed = consumed_currency cmd in
-            let%bind state' = state#add_required_balance consumed in
-            let%map () = state'#assert_balance in
-            ((state'#append to_insert)#append cmd :> t)
+            let%bind state'' = state'#add_required_balance consumed in
+            let%map () = state''#assert_balance in
+            ((state''#append to_insert)#append cmd :> t)
 
       method finalize : (insertion_result, Command_error.t) Result.t =
         let open Result.Let_syntax in
         let%bind consumed = consumed_currency to_insert in
-        let%bind updated = self#add_required_balance consumed in
+        let%bind state = self#update_nonce_gap to_insert in
+        let%bind updated = state#add_required_balance consumed in
         let%map () = updated#assert_balance in
         let final = updated#append to_insert in
         { queue = final#queue
         ; dropped = F_sequence.empty
         ; required_balance = final#required_balance
+        ; nonce_gap = final#current_nonce_gap
         }
     end
 
-  let initial ~balance cmd = (new initial ~balance cmd :> t)
+  let initial ~balance ~current_nonce cmd = 
+    (new initial ~account_nonce:current_nonce ~balance cmd :> t)
 
-  let inserted ~balance ?required_balance ?replaced ~fee q =
-    (new inserted ~balance ?required_balance ?replaced ~fee q :> t)
+  let inserted ~balance ~nonce_gap ?required_balance ?replaced ~fee q =
+    (new inserted ~balance ~nonce_gap ?required_balance ?replaced ~fee q :> t)
 
-  let dropping ?(dropped = F_sequence.empty) ~required_balance ?required_fee
+  let dropping ?(dropped = F_sequence.empty) ~nonce_gap ~required_balance ?required_fee
       ~fee q =
-    (new dropping ~dropped ~required_balance ?required_fee ~fee q :> t)
+    (new dropping ~dropped ~nonce_gap ~required_balance ?required_fee ~fee q :> t)
 end
 
 let fseq_foldl_result ~(init : State.t) seq :
@@ -265,5 +316,5 @@ let fseq_foldl_result ~(init : State.t) seq :
   in
   go init seq
 
-let insert_into_queue ~balance cmd queue =
-  fseq_foldl_result queue ~init:(State.initial ~balance cmd)
+let insert_into_queue ~balance ~current_nonce cmd queue =
+  fseq_foldl_result queue ~init:(State.initial ~balance ~current_nonce cmd)

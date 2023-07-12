@@ -1,4 +1,5 @@
 open Core
+open Mina_base
 open Mina_transaction
 open Unsigned
 
@@ -29,6 +30,11 @@ module Map : Map.S with type Key.t = t
 
 val of_transaction :
      nonce_gap:UInt32.t
+  -> Transaction_hash.User_command_with_valid_signature.t
+  -> t
+
+val of_transaction_queue_empty :
+     account:Account.t
   -> Transaction_hash.User_command_with_valid_signature.t
   -> t
 

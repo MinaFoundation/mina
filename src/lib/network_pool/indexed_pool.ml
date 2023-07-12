@@ -953,7 +953,7 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
         (cmd, Sequence.empty)
     | Some (queued_cmds, _reserved_currency) ->
         assert (not @@ F_sequence.is_empty queued_cmds) ;
-        let%bind { queue; dropped; required_balance } =
+        let%bind { queue; dropped; required_balance; nonce_gap = _ } =
           M.of_result
             (let open Result.Let_syntax in
             let%bind () =
@@ -964,7 +964,7 @@ module Add_from_gossip_exn (M : Writer_result.S) = struct
                      , cmd_applicable_at_nonce ) )
                 Account_nonce.(cmd_applicable_at_nonce >= current_nonce)
             in
-            Sender_queue.insert_into_queue ~balance cmd queued_cmds)
+            Sender_queue.insert_into_queue ~balance ~current_nonce cmd queued_cmds)
         in
         let new_state = (queue, required_balance) in
         let%bind () =
