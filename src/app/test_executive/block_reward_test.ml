@@ -3,18 +3,12 @@ open Integration_test_lib
 open Mina_base
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "block-reward"
 
   let config =
     let open Test_config in
@@ -27,20 +21,10 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
-    let all_nodes = Network.all_nodes network in
-    let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
-    let node =
-      Core.String.Map.find_exn (Network.block_producers network) "node"
-    in
-    let bp_keypair =
-      (Core.String.Map.find_exn (Network.genesis_keypairs network) "node-key")
-        .keypair
-    in
-    let bp_pk = bp_keypair.public_key |> Signature_lib.Public_key.compress in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
+    let node = get_bp_node network "node" in
+    let%bind bp_pk = pub_key_of_node node in
     let bp_pk_account_id = Account_id.create bp_pk Token_id.default in
     let bp_original_balance = Currency.Amount.of_mina_string_exn "1000" in
     let coinbase_reward = Currency.Amount.of_mina_string_exn "720" in

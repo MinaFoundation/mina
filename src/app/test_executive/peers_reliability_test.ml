@@ -3,18 +3,12 @@ open Async
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "peers-reliability"
 
   let config =
     let open Test_config in
@@ -33,26 +27,17 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     }
 
   let run network t =
-    let open Network in
+    let module Node = Network.Node in
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
-    let all_nodes = Network.all_nodes network in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
+    let all_nodes = all_nodes network in
     [%log info] "peers_list"
       ~metadata:
-        [ ( "peers"
-          , `List
-              (List.map (Core.String.Map.data all_nodes) ~f:(fun n ->
-                   `String (Node.id n) ) ) )
+        [ ("peers", `List (List.map all_nodes ~f:(fun n -> `String (Node.id n))))
         ] ;
-    let node_a =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
-    let node_b =
-      Core.String.Map.find_exn (Network.block_producers network) "node-b"
-    in
-    let node_c =
-      Core.String.Map.find_exn (Network.block_producers network) "node-c"
-    in
+    let node_a = get_bp_node network "node-a" in
+    let node_b = get_bp_node network "node-b" in
+    let node_c = get_bp_node network "node-c" in
     (* witness the node_c frontier load on initialization *)
     let%bind () =
       wait_for t
@@ -66,12 +51,9 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
                    (Time.Span.of_ms (20. *. 60. *. 1000.)) ) )
     in
     (* let%bind () = wait_for t (Wait_condition.nodes_to_initialize [ node_c ]) in *)
-    let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
     let%bind initial_connectivity_data =
-      fetch_connectivity_data ~logger (Core.String.Map.data all_nodes)
+      fetch_connectivity_data ~logger all_nodes
     in
     let%bind () =
       section "network is fully connected upon initialization"
@@ -95,9 +77,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              ~amount:(Currency.Amount.of_nanomina_int_exn 1_000_000)
              ~fee:(Currency.Fee.of_nanomina_int_exn 10_000_000)
          in
-         wait_for t
-           (Wait_condition.signed_command_to_be_included_in_frontier ~txn_hash
-              ~node_included_in:(`Node node_c) ) )
+         Wait_for.signed_command_to_be_included_in_frontier t ~txn_hash
+           ~node_included_in:(`Node node_c) )
     in
     let zkapp_account_keypair = Signature_lib.Keypair.create () in
     let%bind () =
@@ -140,7 +121,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
                 ~constraint_constants:(Network.constraint_constants network)
                 parties_spec
          in
-         let%bind () = send_zkapp ~logger node_c parties_create_accounts in
+         let%bind () = Zkapp_util.send ~logger node_c parties_create_accounts in
          wait_for_zkapp parties_create_accounts )
     in
     let%bind () =
@@ -184,7 +165,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          let%bind () =
            wait_for t @@ Wait_condition.persisted_frontier_loaded node_c
          in
-         let%bind () = wait_for t @@ Wait_condition.node_to_initialize node_c in
+         let%bind () = Wait_for.nodes_to_initialize t [ node_c ] in
          wait_for t
            ( Wait_condition.nodes_to_synchronize [ node_a; node_b; node_c ]
            |> Wait_condition.with_timeouts
@@ -195,7 +176,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     section "network is fully connected after one node was restarted"
       (let%bind () = Malleable_error.lift (after (Time.Span.of_sec 240.0)) in
        let%bind final_connectivity_data =
-         fetch_connectivity_data ~logger (Core.String.Map.data all_nodes)
+         fetch_connectivity_data ~logger all_nodes
        in
        assert_peers_completely_connected final_connectivity_data )
 end

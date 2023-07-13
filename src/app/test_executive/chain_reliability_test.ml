@@ -2,18 +2,12 @@ open Core
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "chain-reliability"
 
   let config =
     let open Test_config in
@@ -32,45 +26,35 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     }
 
   let run network t =
-    let open Network in
+    let module Node = Network.Node in
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
-    let all_nodes = Network.all_nodes network in
-    let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
-    let node_a =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
-    let node_b =
-      Core.String.Map.find_exn (Network.block_producers network) "node-b"
-    in
-    let node_c =
-      Core.String.Map.find_exn (Network.block_producers network) "node-c"
-    in
+    let logger = Logger.create ~prefix:(test_name ^ "test: ") () in
+    let all_nodes = all_nodes network in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
+    let node_a = get_bp_node network "node-a" in
+    let node_b = get_bp_node network "node-b" in
+    let node_c = get_bp_node network "node-c" in
     let%bind _ =
-      section "blocks are produced"
-        (wait_for t (Wait_condition.blocks_to_be_produced 2))
+      section "blocks are produced" (Wait_for.blocks_to_be_produced t 2)
     in
     let%bind () =
       section "short bootstrap"
         (let%bind () = Node.stop node_c in
          [%log info] "%s stopped, will now wait for blocks to be produced"
            (Node.id node_c) ;
-         let%bind _ = wait_for t (Wait_condition.blocks_to_be_produced 2) in
+         let%bind _ = Wait_for.blocks_to_be_produced t 2 in
          let%bind () = Node.start ~fresh_state:true node_c in
          [%log info]
            "%s started again, will now wait for this node to initialize"
            (Node.id node_c) ;
-         let%bind () = wait_for t (Wait_condition.node_to_initialize node_c) in
-         wait_for t
-           ( Wait_condition.nodes_to_synchronize [ node_a; node_b; node_c ]
-           |> Wait_condition.with_timeouts
-                ~soft_timeout:(Network_time_span.Slots 3)
-                ~hard_timeout:
-                  (Network_time_span.Literal
-                     (Time.Span.of_ms (15. *. 60. *. 1000.)) ) ) )
+         let%bind () = Wait_for.nodes_to_initialize t [ node_c ] in
+         Wait_for.with_timeouts t
+           ~condition:
+             (Wait_condition.nodes_to_synchronize [ node_a; node_b; node_c ])
+           ~soft_timeout:(Network_time_span.Slots 3)
+           ~hard_timeout:
+             (Network_time_span.Literal (Time.Span.of_ms (15. *. 60. *. 1000.)))
+        )
     in
     let print_chains (labeled_chain_list : (string * string list) list) =
       List.iter labeled_chain_list ~f:(fun labeled_chain ->
@@ -80,8 +64,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section
-        "set up for checking for shared state, send a several payments and \
-         wait for them to be added to chain"
+        "set up for checking for shared state, send several payments and wait \
+         for them to be added to a chain"
         (let receiver_bp = node_a in
          let%bind receiver_pub_key = pub_key_of_node receiver_bp in
          let sender_bp = node_b in
@@ -89,24 +73,23 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          let num_payments = 3 in
          let amount = Currency.Amount.of_mina_string_exn "10" in
          let fee = Currency.Fee.of_mina_string_exn "1" in
-         [%log info] "chain_reliability_test: will now send %d payments"
-           num_payments ;
+         [%log info] "will now send %d payments" num_payments ;
          let%bind hashlist =
-           send_payments ~logger ~sender_pub_key ~receiver_pub_key
+           Payment_util.send_n ~logger ~sender_pub_key ~receiver_pub_key
              ~node:sender_bp ~fee ~amount num_payments
          in
-         [%log info]
-           "chain_reliability_test: sending payments done. will now wait for \
-            payments" ;
-         let%map () = wait_for_payments ~logger ~dsl:t ~hashlist num_payments in
-         [%log info] "chain_reliability_test: finished waiting for payments" ;
+         [%log info] "sending payments done. will now wait for payments" ;
+         let%map () =
+           Wait_for.payments_to_be_included_in_transition_frontier ~logger
+             ~dsl:t ~hashlist num_payments
+         in
+         [%log info] "finished waiting for payments" ;
          () )
     in
     section "common prefix of all nodes is no farther back than 1 block"
       (* the common prefix test relies on at least 4 blocks having been produced.  previous sections altogether have already produced 4, so no further block production is needed.  if previous sections change, then this may need to be re-adjusted*)
       (let%bind (labeled_chains : (string * string list) list) =
-         Malleable_error.List.map (Core.String.Map.data all_nodes)
-           ~f:(fun node ->
+         Malleable_error.List.map all_nodes ~f:(fun node ->
              let%map chain = Network.Node.must_get_best_chain ~logger node in
              (Node.id node, List.map ~f:(fun b -> b.state_hash) chain) )
        in

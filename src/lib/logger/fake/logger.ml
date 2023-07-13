@@ -133,7 +133,12 @@ end
 [%%versioned
 module Stable = struct
   module V1 = struct
-    type t = { null : bool; metadata : Metadata.Stable.V1.t; id : string }
+    type t =
+      { null : bool
+      ; metadata : Metadata.Stable.V1.t
+      ; id : string
+      ; prefix : string
+      }
 
     let to_latest = Fn.id
   end
@@ -141,14 +146,16 @@ end]
 
 let metadata t = t.metadata
 
-let create ?metadata:_ ?(id = "default") () =
-  { null = false; metadata = Metadata.empty; id }
+let create ?metadata:_ ?(id = "default") ?(prefix = "") () =
+  { null = false; metadata = Metadata.empty; id; prefix }
 
-let null () = { null = true; metadata = Metadata.empty; id = "default" }
+let null () =
+  { null = true; metadata = Metadata.empty; id = "default"; prefix = "" }
 
 let extend t _ = t
 
-let change_id { null; metadata; id = _ } ~id = { null; metadata; id }
+let change_id { null; metadata; id = _; prefix } ~id =
+  { null; metadata; id; prefix }
 
 let raw _ _ = not_implemented ()
 

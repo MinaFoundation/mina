@@ -4,17 +4,12 @@ open Integration_test_lib
 open Mina_base
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "zkapps"
 
   let config =
     let open Test_config in
@@ -57,18 +52,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let send_zkapp ~logger node zkapp_command =
     incr transactions_sent ;
-    send_zkapp ~logger node zkapp_command
-
-  (* Call [f] [n] times in sequence *)
-  let repeat_seq ~n ~f =
-    let open Malleable_error.Let_syntax in
-    let rec go n =
-      if n = 0 then return ()
-      else
-        let%bind () = f () in
-        go (n - 1)
-    in
-    go n
+    Zkapp_util.send ~logger node zkapp_command
 
   let send_padding_transactions ~fee ~logger ~n nodes =
     let sender = List.nth_exn nodes 0 in
@@ -114,7 +98,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     match expected_failure with
     | Some failure ->
-        send_invalid_payment ~logger ~sender_pub_key:sender_pk
+        Payment_util.send_invalid ~logger ~sender_pub_key:sender_pk
           ~receiver_pub_key:receiver_pk ~amount ~fee ~nonce ~memo ~valid_until
           ~raw_signature ~expected_failure:failure node
     | None ->
@@ -126,29 +110,19 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let block_producer_nodes =
       Network.block_producers network |> Core.String.Map.data
     in
     (* TODO: capture snark worker processes' failures *)
     let%bind () =
       section_hard "Wait for nodes to initialize"
-        (wait_for t
-           ( Wait_condition.nodes_to_initialize
-           @@ (Network.all_nodes network |> Core.String.Map.data) ) )
+        (Wait_for.all_nodes_to_initialize t network)
     in
-    let node =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
+    let node = get_bp_node network "node-a" in
     let constraint_constants = Network.constraint_constants network in
-    let fish1_kp =
-      (Core.String.Map.find_exn (Network.genesis_keypairs network) "fish1")
-        .keypair
-    in
-    let fish2_kp =
-      (Core.String.Map.find_exn (Network.genesis_keypairs network) "fish2")
-        .keypair
-    in
+    let fish1_kp = (get_genesis_keypair network "fish1").keypair in
+    let fish2_kp = (get_genesis_keypair network "fish2").keypair in
     let num_zkapp_accounts = 3 in
     let zkapp_keypairs =
       List.init num_zkapp_accounts ~f:(fun _ -> Signature_lib.Keypair.create ())
@@ -553,17 +527,10 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       , zkapp_command_token_transfer
       , zkapp_command_token_transfer2 )
     in
-    let with_timeout =
-      let soft_slots = 4 in
-      let soft_timeout = Network_time_span.Slots soft_slots in
-      let hard_timeout = Network_time_span.Slots (soft_slots * 2) in
-      Wait_condition.with_timeouts ~soft_timeout ~hard_timeout
-    in
     let wait_for_zkapp zkapp_command =
       let%map () =
-        wait_for t @@ with_timeout
-        @@ Wait_condition.zkapp_to_be_included_in_frontier ~has_failures:false
-             ~zkapp_command
+        Wait_for.zkapp_to_be_included_in_frontier t ~has_failures:false
+          ~zkapp_command ~soft_slots:4
       in
       [%log info] "ZkApp transaction included in transition frontier"
     in
@@ -705,7 +672,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              [%log info] "Verifying permissions for account"
                ~metadata:[ ("account_id", Account_id.to_yojson account_id) ] ;
              let%bind ledger_permissions =
-               get_account_permissions ~logger node account_id
+               Account_util.get_permissions ~logger node account_id
              in
              if Permissions.equal ledger_permissions permissions_updated then (
                [%log info] "Ledger, updated permissions are equal" ;
@@ -725,7 +692,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section_hard "Send a zkapp with an insufficient fee"
-        (send_invalid_zkapp ~logger node zkapp_command_insufficient_fee
+        (Zkapp_util.send_invalid ~logger node zkapp_command_insufficient_fee
            "Insufficient fee" )
     in
     (* Won't be accepted until the previous transactions are applied *)
@@ -735,34 +702,34 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section_hard "Send a zkapp with an invalid proof"
-        (send_invalid_zkapp ~logger node zkapp_command_invalid_proof
+        (Zkapp_util.send_invalid ~logger node zkapp_command_invalid_proof
            "Verification_failed" )
     in
     let%bind () =
       section_hard "Send a zkapp with an insufficient replace fee"
-        (send_invalid_zkapp ~logger node zkapp_command_insufficient_replace_fee
-           "Insufficient_replace_fee" )
+        (Zkapp_util.send_invalid ~logger node
+           zkapp_command_insufficient_replace_fee "Insufficient_replace_fee" )
     in
     let%bind () =
       section_hard "Send a zkApp transaction with an invalid nonce"
-        (send_invalid_zkapp ~logger node zkapp_command_invalid_nonce
+        (Zkapp_util.send_invalid ~logger node zkapp_command_invalid_nonce
            "Invalid_nonce" )
     in
     let%bind () =
       section_hard
         "Send a zkApp transaction with insufficient_funds, fee too high"
-        (send_invalid_zkapp ~logger node zkapp_command_insufficient_funds
+        (Zkapp_util.send_invalid ~logger node zkapp_command_insufficient_funds
            "Insufficient_funds" )
     in
     let%bind () =
       section_hard "Send a zkApp transaction with an invalid signature"
-        (send_invalid_zkapp ~logger node zkapp_command_invalid_signature
+        (Zkapp_util.send_invalid ~logger node zkapp_command_invalid_signature
            "Verification_failed" )
     in
     let%bind () =
       section_hard "Send a zkApp transaction with a nonexistent fee payer"
-        (send_invalid_zkapp ~logger node zkapp_command_nonexistent_fee_payer
-           "Fee_payer_account_not_found" )
+        (Zkapp_util.send_invalid ~logger node
+           zkapp_command_nonexistent_fee_payer "Fee_payer_account_not_found" )
     in
     let%bind () =
       section_hard
@@ -808,7 +775,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              [%log info] "Verifying updates for account"
                ~metadata:[ ("account_id", Account_id.to_yojson account_id) ] ;
              let%bind ledger_update =
-               get_account_update ~logger node account_id
+               Account_util.get_update ~logger node account_id
              in
              if
                compatible_updates ~ledger_update
@@ -842,16 +809,11 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     let%bind () =
       section_hard "Wait for proof to be emitted"
-        (wait_for t
-           (Wait_condition.ledger_proofs_emitted_since_genesis
-              ~test_config:config ~num_proofs:1 ) )
+        (Wait_for.ledger_proofs_emitted_since_genesis t ~test_config:config
+           ~num_proofs:1 )
     in
     Event_router.cancel (event_router t) snark_work_event_subscription () ;
     Event_router.cancel (event_router t) snark_work_failure_subscription () ;
     section_hard "Running replayer"
-      (let%bind logs =
-         Network.Node.run_replayer ~logger
-           (List.hd_exn @@ (Network.archive_nodes network |> Core.Map.data))
-       in
-       check_replayer_logs ~logger logs )
+      (Archive_node.run_and_check_replayer ~logger network)
 end

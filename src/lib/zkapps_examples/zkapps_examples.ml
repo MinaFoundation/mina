@@ -548,9 +548,8 @@ let compile :
        Pickles.Tag.t
        * _
        * (module Pickles.Proof_intf
-            with type t = ( max_proofs_verified
-                          , max_proofs_verified )
-                          Pickles.Proof.t
+            with type t =
+              (max_proofs_verified, max_proofs_verified) Pickles.Proof.t
              and type statement = Zkapp_statement.t )
        * ( prev_valuess
          , widthss

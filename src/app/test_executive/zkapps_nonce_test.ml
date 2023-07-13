@@ -4,17 +4,12 @@ open Integration_test_lib
 open Mina_base
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "zkapps-nonce"
 
   let config =
     let open Test_config in
@@ -61,21 +56,6 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     if !transactions_sent >= needed_for_padding then 0
     else needed_for_padding - !transactions_sent
 
-  let send_zkapp ~logger node zkapp_command =
-    incr transactions_sent ;
-    send_zkapp ~logger node zkapp_command
-
-  (* Call [f] [n] times in sequence *)
-  let repeat_seq ~n ~f =
-    let open Malleable_error.Let_syntax in
-    let rec go n =
-      if n = 0 then return ()
-      else
-        let%bind () = f () in
-        go (n - 1)
-    in
-    go n
-
   let send_padding_transactions ~fee ~logger ~n nodes =
     let sender = List.nth_exn nodes 0 in
     let receiver = List.nth_exn nodes 1 in
@@ -89,39 +69,26 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let block_producer_nodes =
       Network.block_producers network |> Core.String.Map.data
     in
-    let node =
-      Core.String.Map.find_exn (Network.block_producers network) "node-a"
-    in
-    let fish1_kp =
-      (Core.String.Map.find_exn (Network.genesis_keypairs network) "fish1")
-        .keypair
-    in
+    let node = get_bp_node network "node-a" in
+    let fish1_kp = (get_genesis_keypair network "fish1").keypair in
     let fish1_pk = Signature_lib.Public_key.compress fish1_kp.public_key in
     let fish1_account_id =
       Mina_base.Account_id.create fish1_pk Mina_base.Token_id.default
     in
-    let with_timeout ~soft_slots =
-      let soft_timeout = Network_time_span.Slots soft_slots in
-      let hard_timeout = Network_time_span.Slots (soft_slots * 2) in
-      Wait_condition.with_timeouts ~soft_timeout ~hard_timeout
-    in
     let wait_for_zkapp ~has_failures zkapp_command =
       let%map () =
-        wait_for t @@ with_timeout ~soft_slots:4
-        @@ Wait_condition.zkapp_to_be_included_in_frontier ~has_failures
-             ~zkapp_command
+        Wait_for.zkapp_to_be_included_in_frontier t ~has_failures ~zkapp_command
+          ~soft_slots:4
       in
       [%log info] "zkApp transaction included in transition frontier"
     in
     (*Wait for first BP to start sending payments and avoid partially filling blocks*)
     let first_bp = List.hd_exn block_producer_nodes in
-    let%bind () =
-      wait_for t (Wait_condition.nodes_to_initialize [ first_bp ])
-    in
+    let%bind () = Wait_for.nodes_to_initialize t [ first_bp ] in
     (*Start sending padding transactions to get snarked ledger sooner*)
     let%bind () =
       let fee = Currency.Fee.of_nanomina_int_exn 3_000_000 in
@@ -130,17 +97,16 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     (*wait for the rest*)
     let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize
-           (List.filter
-              ~f:(fun n ->
-                String.(Network.Node.id n <> Network.Node.id first_bp) )
-              (Core.String.Map.data (Network.all_nodes network)) ) )
+      Wait_for.nodes_to_initialize t
+        ( List.filter ~f:(fun n ->
+              String.(Network.Node.id n <> Network.Node.id first_bp) )
+        @@ all_nodes network )
     in
     let keymap =
-      List.fold [ fish1_kp ] ~init:Signature_lib.Public_key.Compressed.Map.empty
+      let open Signature_lib.Public_key.Compressed.Map in
+      List.fold [ fish1_kp ] ~init:empty
         ~f:(fun map { private_key; public_key } ->
-          Signature_lib.Public_key.Compressed.Map.add_exn map
+          add_exn map
             ~key:(Signature_lib.Public_key.compress public_key)
             ~data:private_key )
     in
@@ -279,7 +245,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section_hard
         "Send a zkapp commands with fee payer nonce increments and nonce \
          preconditions"
-        (send_zkapp_batch ~logger node
+        (Zkapp_util.send_batch ~logger node
            [ invalid_nonce_zkapp_cmd_from_fish1; valid_zkapp_cmd_from_fish1 ] )
     in
     let%bind () =
@@ -298,7 +264,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section_hard
         "Send zkapp commands with account updates for fish1 that sets send \
          permission to Proof and then tries to send funds "
-        (send_zkapp_batch ~logger node
+        (Zkapp_util.send_batch ~logger node
            [ set_permission_zkapp_cmd_from_fish1
            ; valid_fee_invalid_permission_zkapp_cmd_from_fish1
            ; invalid_fee_invalid_permission_zkapp_cmd_from_fish1
@@ -360,17 +326,11 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let%bind () =
       (*wait for blocks required to produce 2 proofs given 0.75 slot fill rate + some buffer*)
       section_hard "Wait for proof to be emitted"
-        ( wait_for t
-        @@ Wait_condition.ledger_proofs_emitted_since_genesis
-             ~test_config:config ~num_proofs )
+        (Wait_for.ledger_proofs_emitted_since_genesis t ~test_config:config
+           ~num_proofs )
     in
     Event_router.cancel (event_router t) snark_work_event_subscription () ;
     Event_router.cancel (event_router t) snark_work_failure_subscription () ;
     section_hard "Running replayer"
-      (let%bind logs =
-         Network.Node.run_replayer ~logger
-           ( List.hd_exn
-           @@ (Network.archive_nodes network |> Core.String.Map.data) )
-       in
-       check_replayer_logs ~logger logs )
+      (Archive_node.run_and_check_replayer ~logger network)
 end

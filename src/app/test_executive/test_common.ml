@@ -7,8 +7,9 @@ open Mina_transaction
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
   open Inputs
+  open Engine
+  open Dsl
 
-  (* Call [f] [n] times in sequence *)
   let repeat_seq ~n ~f =
     let open Malleable_error.Let_syntax in
     let rec go n =
@@ -19,73 +20,178 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     in
     go n
 
-  let send_payments ~logger ~sender_pub_key ~receiver_pub_key ~amount ~fee ~node
-      n =
-    let open Malleable_error.Let_syntax in
-    let rec go n hashlist =
-      if n = 0 then return hashlist
-      else
-        let%bind hash =
-          let%map { hash; nonce; _ } =
-            Engine.Network.Node.must_send_payment ~logger ~sender_pub_key
-              ~receiver_pub_key ~amount ~fee node
+  module Payment_util = struct
+    let send_n ~logger ~sender_pub_key ~receiver_pub_key ~amount ~fee ~node n =
+      let open Malleable_error.Let_syntax in
+      let rec go n hashlist =
+        if n = 0 then return hashlist
+        else
+          let%bind hash =
+            let%map { hash; nonce; _ } =
+              Network.Node.must_send_payment ~logger ~sender_pub_key
+                ~receiver_pub_key ~amount ~fee node
+            in
+            [%log info]
+              "sending multiple payments: payment #%d sent with hash of %s and \
+               nonce of %d."
+              n
+              (Transaction_hash.to_base58_check hash)
+              (Unsigned.UInt32.to_int nonce) ;
+            hash
           in
-          [%log info]
-            "sending multiple payments: payment #%d sent with hash of %s and \
-             nonce of %d."
-            n
-            (Transaction_hash.to_base58_check hash)
-            (Unsigned.UInt32.to_int nonce) ;
-          hash
-        in
-        go (n - 1) (List.append hashlist [ hash ])
-    in
-    go n []
+          go (n - 1) (List.append hashlist [ hash ])
+      in
+      go n []
 
-  let wait_for_payments ~logger ~dsl ~hashlist n =
-    let open Malleable_error.Let_syntax in
-    let rec go n hashlist =
-      if n = 0 then return ()
-      else
-        (* confirm payment *)
-        let%bind () =
-          let hash = List.hd_exn hashlist in
-          let%map () =
-            Dsl.wait_for dsl
-              (Dsl.Wait_condition.signed_command_to_be_included_in_frontier
-                 ~txn_hash:hash ~node_included_in:`Any_node )
+    let send_invalid ~logger node ~sender_pub_key ~receiver_pub_key ~amount ~fee
+        ~nonce ~memo ~valid_until ~raw_signature ~expected_failure :
+        unit Malleable_error.t =
+      [%log info] "Sending payment, expected to fail" ;
+      let expected_failure = String.lowercase expected_failure in
+      match%bind.Deferred
+        Network.Node.send_payment_with_raw_sig ~logger node ~sender_pub_key
+          ~receiver_pub_key ~amount ~fee ~nonce ~memo ~valid_until
+          ~raw_signature
+      with
+      | Ok _ ->
+          [%log error] "Payment succeeded, expected error \"%s\""
+            expected_failure ;
+          Malleable_error.hard_error_format
+            "Payment transaction succeeded, expected error \"%s\""
+            expected_failure
+      | Error err ->
+          let err_str = Error.to_string_mach err |> String.lowercase in
+          if String.is_substring ~substring:expected_failure err_str then (
+            [%log info] "Payment failed as expected"
+              ~metadata:[ ("error", `String err_str) ] ;
+            Malleable_error.return () )
+          else (
+            [%log error]
+              "Error sending payment, for a reason other than the expected \
+               \"%s\""
+              expected_failure
+              ~metadata:[ ("error", `String err_str) ] ;
+            Malleable_error.hard_error_format
+              "Payment failed: %s, but expected \"%s\"" err_str expected_failure
+            )
+
+    (* TODO: must_send_payment_with_raw_sig *)
+  end
+
+  module Account_util = struct
+    let get_permissions ~logger node account_id =
+      [%log info] "Getting permissions for account"
+        ~metadata:[ ("account_id", Mina_base.Account_id.to_yojson account_id) ] ;
+      match%bind.Deferred
+        Network.Node.get_account_permissions ~logger node ~account_id
+      with
+      | Ok permissions ->
+          [%log info] "Got account permissions" ;
+          Malleable_error.return permissions
+      | Error err ->
+          let err_str = Error.to_string_mach err in
+          [%log error] "Error getting account permissions"
+            ~metadata:[ ("error", `String err_str) ] ;
+          Malleable_error.hard_error (Error.of_string err_str)
+
+    let get_update ~logger node account_id =
+      [%log info] "Getting update for account"
+        ~metadata:[ ("account_id", Mina_base.Account_id.to_yojson account_id) ] ;
+      match%bind.Deferred
+        Network.Node.get_account_update ~logger node ~account_id
+      with
+      | Ok update ->
+          [%log info] "Got account update" ;
+          Malleable_error.return update
+      | Error err ->
+          let err_str = Error.to_string_mach err in
+          [%log error] "Error getting account update"
+            ~metadata:[ ("error", `String err_str) ] ;
+          Malleable_error.hard_error (Error.of_string err_str)
+  end
+
+  module Wait_for = struct
+    let nodes_to_initialize dsl nodes =
+      wait_for dsl (Wait_condition.nodes_to_initialize nodes)
+
+    let all_nodes_to_initialize dsl network =
+      nodes_to_initialize dsl (Core.String.Map.data @@ Network.all_nodes network)
+
+    let blocks_to_be_produced dsl n =
+      wait_for dsl (Wait_condition.blocks_to_be_produced n)
+
+    let nodes_to_synchronize dsl nodes =
+      wait_for dsl (Wait_condition.nodes_to_synchronize nodes)
+
+    let ledger_proofs_emitted_since_genesis dsl ~test_config ~num_proofs =
+      wait_for dsl
+      @@ Wait_condition.ledger_proofs_emitted_since_genesis ~test_config
+           ~num_proofs
+
+    let payments_to_be_included_in_transition_frontier ~logger ~dsl ~hashlist n
+        =
+      let open Malleable_error.Let_syntax in
+      let rec go n hashlist =
+        if n = 0 then return ()
+        else
+          (* confirm payment *)
+          let%bind () =
+            let hash = List.hd_exn hashlist in
+            let%map () =
+              wait_for dsl
+              @@ Wait_condition.signed_command_to_be_included_in_frontier
+                   ~txn_hash:hash ~node_included_in:`Any_node
+            in
+            [%log info]
+              "wait for multiple payments: payment #%d with hash %s \
+               successfully included in frontier."
+              n
+              (Transaction_hash.to_base58_check hash) ;
+            ()
           in
-          [%log info]
-            "wait for multiple payments: payment #%d with hash %s successfully \
-             included in frontier."
-            n
-            (Transaction_hash.to_base58_check hash) ;
-          ()
-        in
-        go (n - 1) (List.tl_exn hashlist)
-    in
-    go n hashlist
+          go (n - 1) (List.tl_exn hashlist)
+      in
+      go n hashlist
 
-  (* let pub_key_of_node node =
-     let open Signature_lib in
-     match Engine.Network.Node.network_keypair node with
-     | Some nk ->
-         Malleable_error.return (nk.keypair.public_key |> Public_key.compress)
-     | None ->
-         Malleable_error.hard_error_format
-           "Node '%s' did not have a network keypair, if node is a block \
-            producer this should not happen"
-           (Engine.Network.Node.id node) *)
+    let signed_command_to_be_included_in_frontier dsl ~txn_hash
+        ~node_included_in =
+      wait_for dsl
+      @@ Wait_condition.signed_command_to_be_included_in_frontier ~txn_hash
+           ~node_included_in
+
+    let with_timeouts dsl ~condition ~soft_timeout ~hard_timeout =
+      wait_for dsl
+        (Wait_condition.with_timeouts ~soft_timeout ~hard_timeout condition)
+
+    let zkapp_to_be_included_in_frontier dsl ~has_failures ~zkapp_command
+        ~soft_slots =
+      with_timeouts dsl ~soft_timeout:(Network_time_span.Slots soft_slots)
+        ~hard_timeout:(Network_time_span.Slots (2 * soft_slots))
+        ~condition:
+          (Wait_condition.zkapp_to_be_included_in_frontier ~has_failures
+             ~zkapp_command )
+  end
+
+  let all_nodes network = Core.String.Map.data (Network.all_nodes network)
+
+  let get_node network node_name =
+    Core.String.Map.find_exn (Network.all_nodes network) node_name
+
+  let get_bp_node network node_name =
+    Core.String.Map.find_exn (Network.block_producers network) node_name
+
+  let get_genesis_keypair network account_name =
+    Core.String.Map.find_exn (Network.genesis_keypairs network) account_name
 
   let make_get_key ~f node =
-    match Engine.Network.Node.network_keypair node with
+    match Network.Node.network_keypair node with
     | Some nk ->
         Malleable_error.return (f nk)
     | None ->
         Malleable_error.hard_error_format
           "Node '%s' did not have a network keypair, if node is a block \
            producer this should not happen"
-          (Engine.Network.Node.id node)
+          (Network.Node.id node)
 
   let pub_key_of_node =
     make_get_key ~f:(fun nk ->
@@ -122,7 +228,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       [%log error] "%s" error_str ;
       Malleable_error.soft_error ~value:() (Error.of_string error_str)
 
-  module X = struct
+  module Display = struct
     include String
 
     type display = string [@@deriving yojson]
@@ -132,7 +238,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let name = Fn.id
   end
 
-  module G = Visualization.Make_ocamlgraph (X)
+  module G = Visualization.Make_ocamlgraph (Display)
 
   let graph_of_adjacency_list (adj : (string * string list) list) =
     List.fold adj ~init:G.empty ~f:(fun acc (x, xs) ->
@@ -144,7 +250,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let fetch_connectivity_data ~logger nodes =
     let open Malleable_error.Let_syntax in
     Malleable_error.List.map nodes ~f:(fun node ->
-        let%map response = Engine.Network.Node.must_get_peer_id ~logger node in
+        let%map response = Network.Node.must_get_peer_ids ~logger node in
         (node, response) )
 
   let assert_peers_completely_connected nodes_and_responses =
@@ -152,7 +258,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let check_peer_connected_to_all_others ~nodes_by_peer_id ~peer_id
         ~connected_peers =
       let get_node_id p =
-        p |> String.Map.find_exn nodes_by_peer_id |> Engine.Network.Node.id
+        p |> String.Map.find_exn nodes_by_peer_id |> Network.Node.id
       in
       let expected_peers =
         nodes_by_peer_id |> String.Map.keys
@@ -180,14 +286,16 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
           ~connected_peers )
 
   let assert_peers_cant_be_partitioned ~max_disconnections nodes_and_responses =
-    (* this check checks that the network does NOT become partitioned into isolated subgraphs, even if n nodes are hypothetically removed from the network.*)
+    (* checks that the network does NOT become partitioned into isolated subgraphs,
+       even if n nodes are hypothetically removed from the network.*)
     let _, responses = List.unzip nodes_and_responses in
     let open Graph_algorithms in
     let () =
       Out_channel.with_file "/tmp/network-graph.dot" ~f:(fun c ->
           G.output_graph c (graph_of_adjacency_list responses) )
     in
-    (* Check that the network cannot be disconnected by removing up to max_disconnections number of nodes. *)
+    (* checks that the network cannot be disconnected by removing up to
+       [max_disconnections] many nodes. *)
     match
       Nat.take
         (Graph_algorithms.connectivity (module String) responses)
@@ -199,236 +307,190 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     | `Ok ->
         Malleable_error.return ()
 
-  open Inputs.Engine
-
-  let send_zkapp_batch ~logger node zkapp_commands =
-    List.iter zkapp_commands ~f:(fun zkapp_command ->
-        [%log info] "Sending zkApp"
-          ~metadata:
-            [ ("zkapp_command", Mina_base.Zkapp_command.to_yojson zkapp_command)
-            ; ( "memo"
-              , `String
-                  (Mina_base.Signed_command_memo.to_string_hum
-                     zkapp_command.memo ) )
-            ] ) ;
-    match%bind.Deferred
-      Network.Node.send_zkapp_batch ~logger node ~zkapp_commands
-    with
-    | Ok _zkapp_ids ->
-        [%log info] "ZkApp transactions sent" ;
-        Malleable_error.return ()
-    | Error err ->
-        let err_str = Error.to_string_mach err in
-        [%log error] "Error sending zkApp transactions"
-          ~metadata:[ ("error", `String err_str) ] ;
-        Malleable_error.hard_error_format "Error sending zkApp transactions: %s"
-          err_str
-
-  let send_zkapp ~logger node zkapp_command =
-    send_zkapp_batch ~logger node [ zkapp_command ]
-
-  let send_invalid_zkapp ~logger node zkapp_command substring =
-    [%log info] "Sending zkApp, expected to fail" ;
-    match%bind.Deferred
-      Network.Node.send_zkapp_batch ~logger node
-        ~zkapp_commands:[ zkapp_command ]
-    with
-    | Ok _zkapp_ids ->
-        [%log error] "ZkApp transaction succeeded, expected error \"%s\""
-          substring ;
-        Malleable_error.hard_error_format
-          "ZkApp transaction succeeded, expected error \"%s\"" substring
-    | Error err ->
-        let err_str = Error.to_string_mach err in
-        if String.is_substring ~substring err_str then (
-          [%log info] "ZkApp transaction failed as expected"
-            ~metadata:[ ("error", `String err_str) ] ;
-          Malleable_error.return () )
-        else (
-          [%log error]
-            "Error sending zkApp, for a reason other than the expected \"%s\""
-            substring
+  module Zkapp_util = struct
+    let send_batch ~logger node zkapp_commands =
+      List.iter zkapp_commands ~f:(fun zkapp_command ->
+          [%log info] "Sending zkApp"
+            ~metadata:
+              [ ( "zkapp_command"
+                , Mina_base.Zkapp_command.to_yojson zkapp_command )
+              ; ( "memo"
+                , `String
+                    (Mina_base.Signed_command_memo.to_string_hum
+                       zkapp_command.memo ) )
+              ] ) ;
+      match%bind.Deferred
+        Network.Node.send_zkapp_batch ~logger node ~zkapp_commands
+      with
+      | Ok _zkapp_ids ->
+          [%log info] "ZkApp transactions sent" ;
+          Malleable_error.return ()
+      | Error err ->
+          let err_str = Error.to_string_mach err in
+          [%log error] "Error sending zkApp transactions"
             ~metadata:[ ("error", `String err_str) ] ;
           Malleable_error.hard_error_format
-            "ZkApp transaction failed: %s, but expected \"%s\"" err_str
-            substring )
+            "Error sending zkApp transactions: %s" err_str
 
-  let send_invalid_payment ~logger node ~sender_pub_key ~receiver_pub_key
-      ~amount ~fee ~nonce ~memo ~valid_until ~raw_signature ~expected_failure :
-      unit Malleable_error.t =
-    [%log info] "Sending payment, expected to fail" ;
-    let expected_failure = String.lowercase expected_failure in
-    match%bind.Deferred
-      Network.Node.send_payment_with_raw_sig ~logger node ~sender_pub_key
-        ~receiver_pub_key ~amount ~fee ~nonce ~memo ~valid_until ~raw_signature
-    with
-    | Ok _ ->
-        [%log error] "Payment succeeded, expected error \"%s\"" expected_failure ;
-        Malleable_error.hard_error_format
-          "Payment transaction succeeded, expected error \"%s\""
-          expected_failure
-    | Error err ->
-        let err_str = Error.to_string_mach err |> String.lowercase in
-        if String.is_substring ~substring:expected_failure err_str then (
-          [%log info] "Payment failed as expected"
-            ~metadata:[ ("error", `String err_str) ] ;
-          Malleable_error.return () )
-        else (
-          [%log error]
-            "Error sending payment, for a reason other than the expected \"%s\""
-            expected_failure
-            ~metadata:[ ("error", `String err_str) ] ;
+    let send ~logger node zkapp_command =
+      send_batch ~logger node [ zkapp_command ]
+
+    let send_invalid ~logger node zkapp_command substring =
+      [%log info] "Sending zkApp, expected to fail" ;
+      match%bind.Deferred
+        Network.Node.send_zkapp_batch ~logger node
+          ~zkapp_commands:[ zkapp_command ]
+      with
+      | Ok _zkapp_ids ->
+          [%log error] "ZkApp transaction succeeded, expected error \"%s\""
+            substring ;
           Malleable_error.hard_error_format
-            "Payment failed: %s, but expected \"%s\"" err_str expected_failure )
+            "ZkApp transaction succeeded, expected error \"%s\"" substring
+      | Error err ->
+          let err_str = Error.to_string_mach err in
+          if String.is_substring ~substring err_str then (
+            [%log info] "ZkApp transaction failed as expected"
+              ~metadata:[ ("error", `String err_str) ] ;
+            Malleable_error.return () )
+          else (
+            [%log error]
+              "Error sending zkApp, for a reason other than the expected \"%s\""
+              substring
+              ~metadata:[ ("error", `String err_str) ] ;
+            Malleable_error.hard_error_format
+              "ZkApp transaction failed: %s, but expected \"%s\"" err_str
+              substring )
 
-  let get_account_permissions ~logger node account_id =
-    [%log info] "Getting permissions for account"
-      ~metadata:[ ("account_id", Mina_base.Account_id.to_yojson account_id) ] ;
-    match%bind.Deferred
-      Network.Node.get_account_permissions ~logger node ~account_id
-    with
-    | Ok permissions ->
-        [%log info] "Got account permissions" ;
-        Malleable_error.return permissions
-    | Error err ->
-        let err_str = Error.to_string_mach err in
-        [%log error] "Error getting account permissions"
-          ~metadata:[ ("error", `String err_str) ] ;
-        Malleable_error.hard_error (Error.of_string err_str)
+    let get_pooled_zkapp_commands ~logger node ~pk =
+      [%log info] "Getting pooled zkApp commands"
+        ~metadata:
+          [ ("pub_key", Signature_lib.Public_key.Compressed.to_yojson pk) ] ;
+      match%bind.Deferred
+        Network.Node.get_pooled_zkapp_commands ~logger node ~pk
+      with
+      | Ok zkapp_commands ->
+          [%log info] "Got pooled zkApp commands" ;
+          Malleable_error.return zkapp_commands
+      | Error err ->
+          let err_str = Error.to_string_mach err in
+          [%log error] "Error getting pooled zkApp commands"
+            ~metadata:[ ("error", `String err_str) ] ;
+          Malleable_error.hard_error (Error.of_string err_str)
 
-  let get_account_update ~logger node account_id =
-    [%log info] "Getting update for account"
-      ~metadata:[ ("account_id", Mina_base.Account_id.to_yojson account_id) ] ;
-    match%bind.Deferred
-      Network.Node.get_account_update ~logger node ~account_id
-    with
-    | Ok update ->
-        [%log info] "Got account update" ;
-        Malleable_error.return update
-    | Error err ->
-        let err_str = Error.to_string_mach err in
-        [%log error] "Error getting account update"
-          ~metadata:[ ("error", `String err_str) ] ;
-        Malleable_error.hard_error (Error.of_string err_str)
+    let compatible_item req_item ledg_item ~equal =
+      match (req_item, ledg_item) with
+      | Mina_base.Zkapp_basic.Set_or_keep.Keep, _ ->
+          true
+      | Set v1, Mina_base.Zkapp_basic.Set_or_keep.Set v2 ->
+          equal v1 v2
+      | Set _, Keep ->
+          false
 
-  let get_pooled_zkapp_commands ~logger node pk =
-    [%log info] "Getting pooled zkApp commands"
-      ~metadata:
-        [ ("pub_key", Signature_lib.Public_key.Compressed.to_yojson pk) ] ;
-    match%bind.Deferred
-      Network.Node.get_pooled_zkapp_commands ~logger node ~pk
-    with
-    | Ok zkapp_commands ->
-        [%log info] "Got pooled zkApp commands" ;
-        Malleable_error.return zkapp_commands
-    | Error err ->
-        let err_str = Error.to_string_mach err in
-        [%log error] "Error getting pooled zkApp commands"
-          ~metadata:[ ("error", `String err_str) ] ;
-        Malleable_error.hard_error (Error.of_string err_str)
+    let compatible_updates ~(ledger_update : Mina_base.Account_update.Update.t)
+        ~(requested_update : Mina_base.Account_update.Update.t) : bool =
+      (* the "update" in the ledger is derived from the account
 
-  let compatible_item req_item ledg_item ~equal =
-    match (req_item, ledg_item) with
-    | Mina_base.Zkapp_basic.Set_or_keep.Keep, _ ->
-        true
-    | Set v1, Mina_base.Zkapp_basic.Set_or_keep.Set v2 ->
-        equal v1 v2
-    | Set _, Keep ->
-        false
+         if the requested update has `Set` for a field, we
+         should see `Set` for the same value in the ledger update
 
-  let compatible_updates ~(ledger_update : Mina_base.Account_update.Update.t)
-      ~(requested_update : Mina_base.Account_update.Update.t) : bool =
-    (* the "update" in the ledger is derived from the account
+         if the requested update has `Keep` for a field, any
+         value in the ledger update is acceptable
 
-       if the requested update has `Set` for a field, we
-       should see `Set` for the same value in the ledger update
-
-       if the requested update has `Keep` for a field, any
-       value in the ledger update is acceptable
-
-       for the app state, we apply this principle element-wise
-    *)
-    let app_states_compat =
-      let fs_requested =
-        Pickles_types.Vector.Vector_8.to_list requested_update.app_state
+         for the app state, we apply this principle element-wise
+      *)
+      let app_states_compat =
+        let fs_requested =
+          Pickles_types.Vector.Vector_8.to_list requested_update.app_state
+        in
+        let fs_ledger =
+          Pickles_types.Vector.Vector_8.to_list ledger_update.app_state
+        in
+        List.for_all2_exn fs_requested fs_ledger ~f:(fun req ledg ->
+            compatible_item req ledg ~equal:Pickles.Backend.Tick.Field.equal )
       in
-      let fs_ledger =
-        Pickles_types.Vector.Vector_8.to_list ledger_update.app_state
+      let delegates_compat =
+        compatible_item requested_update.delegate ledger_update.delegate
+          ~equal:Signature_lib.Public_key.Compressed.equal
       in
-      List.for_all2_exn fs_requested fs_ledger ~f:(fun req ledg ->
-          compatible_item req ledg ~equal:Pickles.Backend.Tick.Field.equal )
-    in
-    let delegates_compat =
-      compatible_item requested_update.delegate ledger_update.delegate
-        ~equal:Signature_lib.Public_key.Compressed.equal
-    in
-    let verification_keys_compat =
-      compatible_item requested_update.verification_key
-        ledger_update.verification_key
-        ~equal:
-          [%equal:
-            ( Pickles.Side_loaded.Verification_key.t
-            , Pickles.Backend.Tick.Field.t )
-            With_hash.t]
-    in
-    let permissions_compat =
-      compatible_item requested_update.permissions ledger_update.permissions
-        ~equal:Mina_base.Permissions.equal
-    in
-    let zkapp_uris_compat =
-      compatible_item requested_update.zkapp_uri ledger_update.zkapp_uri
-        ~equal:String.equal
-    in
-    let token_symbols_compat =
-      compatible_item requested_update.token_symbol ledger_update.token_symbol
-        ~equal:String.equal
-    in
-    let timings_compat =
-      compatible_item requested_update.timing ledger_update.timing
-        ~equal:Mina_base.Account_update.Update.Timing_info.equal
-    in
-    let voting_fors_compat =
-      compatible_item requested_update.voting_for ledger_update.voting_for
-        ~equal:Mina_base.State_hash.equal
-    in
-    List.for_all
-      [ app_states_compat
-      ; delegates_compat
-      ; verification_keys_compat
-      ; permissions_compat
-      ; zkapp_uris_compat
-      ; token_symbols_compat
-      ; timings_compat
-      ; voting_fors_compat
-      ]
-      ~f:Fn.id
+      let verification_keys_compat =
+        compatible_item requested_update.verification_key
+          ledger_update.verification_key
+          ~equal:
+            [%equal:
+              ( Pickles.Side_loaded.Verification_key.t
+              , Pickles.Backend.Tick.Field.t )
+              With_hash.t]
+      in
+      let permissions_compat =
+        compatible_item requested_update.permissions ledger_update.permissions
+          ~equal:Mina_base.Permissions.equal
+      in
+      let zkapp_uris_compat =
+        compatible_item requested_update.zkapp_uri ledger_update.zkapp_uri
+          ~equal:String.equal
+      in
+      let token_symbols_compat =
+        compatible_item requested_update.token_symbol ledger_update.token_symbol
+          ~equal:String.equal
+      in
+      let timings_compat =
+        compatible_item requested_update.timing ledger_update.timing
+          ~equal:Mina_base.Account_update.Update.Timing_info.equal
+      in
+      let voting_fors_compat =
+        compatible_item requested_update.voting_for ledger_update.voting_for
+          ~equal:Mina_base.State_hash.equal
+      in
+      List.for_all
+        [ app_states_compat
+        ; delegates_compat
+        ; verification_keys_compat
+        ; permissions_compat
+        ; zkapp_uris_compat
+        ; token_symbols_compat
+        ; timings_compat
+        ; voting_fors_compat
+        ]
+        ~f:Fn.id
+  end
 
-  (* [logs] is a string containing the entire replayer output *)
-  let check_replayer_logs ~logger logs =
-    let log_level_substring level = sprintf {|"level":"%s"|} level in
-    let error_log_substring = log_level_substring "Error" in
-    let fatal_log_substring = log_level_substring "Fatal" in
-    let info_log_substring = log_level_substring "Info" in
-    let split_logs = String.split logs ~on:'\n' in
-    let error_logs =
-      split_logs
-      |> List.filter ~f:(fun log ->
-             String.is_substring log ~substring:error_log_substring
-             || String.is_substring log ~substring:fatal_log_substring )
-    in
-    let info_logs =
-      split_logs
-      |> List.filter ~f:(fun log ->
-             String.is_substring log ~substring:info_log_substring )
-    in
-    if Mina_stdlib.List.Length.Compare.(info_logs < 25) then
-      Malleable_error.hard_error_string
-        (sprintf "Replayer output contains suspiciously few (%d) Info logs"
-           (List.length info_logs) )
-    else if List.is_empty error_logs then (
-      [%log info] "The replayer encountered no errors" ;
-      Malleable_error.return () )
-    else
-      let error = String.concat error_logs ~sep:"\n  " in
-      Malleable_error.hard_error_string ("Replayer errors:\n  " ^ error)
+  module Archive_node = struct
+    let run_replayer ~logger network =
+      Network.Node.run_replayer ~logger
+      @@ List.hd_exn (Network.archive_nodes network |> Core.Map.data)
+
+    (* [logs] is a string containing the entire replayer output *)
+    let check_replayer_logs ~logger logs =
+      let log_level_substring level = sprintf {|"level":"%s"|} level in
+      let error_log_substring = log_level_substring "Error" in
+      let fatal_log_substring = log_level_substring "Fatal" in
+      let info_log_substring = log_level_substring "Info" in
+      let split_logs = String.split logs ~on:'\n' in
+      let error_logs =
+        split_logs
+        |> List.filter ~f:(fun log ->
+               String.is_substring log ~substring:error_log_substring
+               || String.is_substring log ~substring:fatal_log_substring )
+      in
+      let info_logs =
+        split_logs
+        |> List.filter ~f:(fun log ->
+               String.is_substring log ~substring:info_log_substring )
+      in
+      if Mina_stdlib.List.Length.Compare.(info_logs < 25) then
+        Malleable_error.hard_error_string
+          (sprintf "Replayer output contains suspiciously few (%d) Info logs"
+             (List.length info_logs) )
+      else if List.is_empty error_logs then (
+        [%log info] "The replayer encountered no errors" ;
+        Malleable_error.return () )
+      else
+        let error = String.concat error_logs ~sep:"\n  " in
+        Malleable_error.hard_error_string ("Replayer errors:\n  " ^ error)
+
+    let run_and_check_replayer ~logger network =
+      let open Malleable_error.Let_syntax in
+      let%bind logs = run_replayer ~logger network in
+      check_replayer_logs ~logger logs
+  end
 end

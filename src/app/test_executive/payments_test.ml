@@ -4,18 +4,12 @@ open Integration_test_lib
 open Mina_base
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "payments"
 
   (* TODO: refactor all currency values to decimal represenation *)
   (* TODO: test account creation fee *)
@@ -80,49 +74,21 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
   let run network t =
     let open Network in
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
-    let all_nodes = Network.all_nodes network in
-    let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
-    let untimed_node_a =
-      Core.String.Map.find_exn
-        (Network.block_producers network)
-        "untimed-node-a"
-    in
-    let untimed_node_b =
-      Core.String.Map.find_exn
-        (Network.block_producers network)
-        "untimed-node-b"
-    in
-    let timed_node_c =
-      Core.String.Map.find_exn (Network.block_producers network) "timed-node-c"
-    in
-    let fish1 =
-      Core.String.Map.find_exn (Network.genesis_keypairs network) "fish1"
-    in
-    let fish2 =
-      Core.String.Map.find_exn (Network.genesis_keypairs network) "fish2"
-    in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
+    let untimed_node_a = get_bp_node network "untimed-node-a" in
+    let untimed_node_b = get_bp_node network "untimed-node-b" in
+    let timed_node_c = get_bp_node network "timed-node-c" in
+    let fish1 = get_genesis_keypair network "fish1" in
+    let fish2 = get_genesis_keypair network "fish2" in
     [%log info] "extra genesis keypairs: %s"
       (List.to_string [ fish1.keypair; fish2.keypair ]
          ~f:(fun { Signature_lib.Keypair.public_key; _ } ->
            public_key |> Signature_lib.Public_key.to_bigstring
            |> Bigstring.to_string ) ) ;
-    let snark_coordinator =
-      Core.String.Map.find_exn (Network.all_nodes network) "snark-node"
-    in
-    let snark_node_key1 =
-      Core.String.Map.find_exn
-        (Network.genesis_keypairs network)
-        "snark-node-key1"
-    in
-    let snark_node_key2 =
-      Core.String.Map.find_exn
-        (Network.genesis_keypairs network)
-        "snark-node-key2"
-    in
+    let snark_coordinator = get_node network "snark-node" in
+    let snark_node_key1 = get_genesis_keypair network "snark-node-key1" in
+    let snark_node_key2 = get_genesis_keypair network "snark-node-key2" in
     [%log info] "snark node keypairs: %s"
       (List.to_string [ snark_node_key1.keypair; snark_node_key2.keypair ]
          ~f:(fun { Signature_lib.Keypair.public_key; _ } ->
@@ -131,7 +97,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     (* create a signed txn which we'll use to make a successfull txn, and then a replay attack *)
     let amount = Currency.Amount.of_mina_string_exn "10" in
     let fee = Currency.Fee.of_mina_string_exn "1" in
-    let test_constants = Engine.Network.constraint_constants network in
+    let test_constants = Network.constraint_constants network in
     let receiver_pub_key =
       fish1.keypair.public_key |> Signature_lib.Public_key.compress
     in
@@ -205,9 +171,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              ~raw_signature:
                (Mina_base.Signature.Raw.encode signed_cmmd.signature)
          in
-         wait_for t
-           (Wait_condition.signed_command_to_be_included_in_frontier
-              ~txn_hash:hash ~node_included_in:(`Node untimed_node_b) ) )
+         Wait_for.signed_command_to_be_included_in_frontier t ~txn_hash:hash
+           ~node_included_in:(`Node untimed_node_b) )
     in
     let%bind () =
       section
@@ -399,9 +364,8 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
            Network.Node.must_send_payment ~logger timed_node_c ~sender_pub_key
              ~receiver_pub_key ~amount ~fee
          in
-         wait_for t
-           (Wait_condition.signed_command_to_be_included_in_frontier
-              ~txn_hash:hash ~node_included_in:(`Node timed_node_c) ) )
+         Wait_for.signed_command_to_be_included_in_frontier t ~txn_hash:hash
+           ~node_included_in:(`Node timed_node_c) )
     in
     let%bind () =
       section "unable to send payment from timed account using illiquid tokens"
@@ -472,12 +436,11 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
             Hence, 6*2 = 12 transactions untill we get the first snarked ledger.
             2 successful txn are sent in the prior course of this test,
             so spamming out at least 10 more here will trigger a ledger proof to be emitted *)
-           send_payments ~logger ~sender_pub_key ~receiver_pub_key
+           Payment_util.send_n ~logger ~sender_pub_key ~receiver_pub_key
              ~amount:Currency.Amount.one ~fee ~node:sender 10
          in
-         wait_for t
-           (Wait_condition.ledger_proofs_emitted_since_genesis
-              ~test_config:config ~num_proofs:1 ) )
+         Wait_for.ledger_proofs_emitted_since_genesis t ~test_config:config
+           ~num_proofs:1 )
     in
     let%bind () =
       section_hard
@@ -552,12 +515,11 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
          let sender = untimed_node_a in
          let%bind sender_pub_key = pub_key_of_node sender in
          let%bind _ =
-           send_payments ~logger ~sender_pub_key ~receiver_pub_key
+           Payment_util.send_n ~logger ~sender_pub_key ~receiver_pub_key
              ~amount:Currency.Amount.one ~fee ~node:sender 12
          in
-         wait_for t
-           (Wait_condition.ledger_proofs_emitted_since_genesis ~num_proofs:2
-              ~test_config:config ) )
+         Wait_for.ledger_proofs_emitted_since_genesis t ~num_proofs:2
+           ~test_config:config )
     in
     let%bind () =
       section_hard
@@ -612,9 +574,5 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
              config.snark_worker_fee )
     in
     section_hard "running replayer"
-      (let%bind logs =
-         Network.Node.run_replayer ~logger
-           (List.hd_exn @@ (Network.archive_nodes network |> Core.Map.data))
-       in
-       check_replayer_logs ~logger logs )
+      (Archive_node.run_and_check_replayer ~logger network)
 end

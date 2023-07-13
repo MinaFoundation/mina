@@ -2,18 +2,12 @@ open Core
 open Integration_test_lib
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  (* TODO: find a way to avoid this type alias (first class module signatures restrictions make this tricky) *)
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "block-prod-prio"
 
   let num_extra_keys = 1000
 
@@ -74,13 +68,9 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
 
   let run network t =
     let open Malleable_error.Let_syntax in
-    let logger = Logger.create () in
-    let receiver =
-      Core.String.Map.find_exn (Network.block_producers network) "receiver"
-    in
-    let observer =
-      Core.String.Map.find_exn (Network.block_producers network) "observer"
-    in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
+    let receiver = get_bp_node network "receiver" in
+    let observer = get_bp_node network "observer" in
     let%bind receiver_pub_key = pub_key_of_node receiver in
     let empty_bps =
       Core.String.Map.remove
@@ -114,14 +104,10 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     let window_ms =
       (Network.constraint_constants network).block_window_duration_ms
     in
-    let all_nodes = Network.all_nodes network in
-    let%bind () =
-      wait_for t
-        (Wait_condition.nodes_to_initialize (Core.String.Map.data all_nodes))
-    in
+    let%bind () = Wait_for.all_nodes_to_initialize t network in
     let%bind () =
       section_hard "wait for 3 blocks to be produced (warm-up)"
-        (wait_for t (Wait_condition.blocks_to_be_produced 3))
+        (Wait_for.blocks_to_be_produced t 3)
     in
     let%bind () =
       section_hard "stop observer"
@@ -228,12 +214,11 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
        [%log info]
          "Observer %s started again, will now wait for this node to initialize"
          (Network.Node.id observer) ;
-       let%bind () = wait_for t (Wait_condition.node_to_initialize observer) in
-       wait_for t
-         ( Wait_condition.nodes_to_synchronize [ receiver; observer ]
-         |> Wait_condition.with_timeouts
-              ~soft_timeout:(Network_time_span.Slots 3)
-              ~hard_timeout:
-                (Network_time_span.Literal
-                   (Time.Span.of_ms (15. *. 60. *. 1000.)) ) ) )
+       let%bind () = Wait_for.nodes_to_initialize t [ observer ] in
+       Wait_for.with_timeouts t
+         ~condition:(Wait_condition.nodes_to_synchronize [ receiver; observer ])
+         ~soft_timeout:(Network_time_span.Slots 3)
+         ~hard_timeout:
+           (Network_time_span.Literal (Time.Span.of_ms (15. *. 60. *. 1000.)))
+      )
 end

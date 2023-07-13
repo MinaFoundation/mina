@@ -40,8 +40,6 @@ let zkapp_kp = Keypair.create ()
 
 let zkapp_pk = Public_key.compress zkapp_kp.public_key
 
-let zkapp_account_id = Account_id.create zkapp_pk Token_id.default
-
 module Trivial_rule1 = Make_trivial_rule (struct
   let id = 1
 
@@ -55,17 +53,12 @@ module Trivial_rule2 = Make_trivial_rule (struct
 end)
 
 module Make (Inputs : Intf.Test.Inputs_intf) = struct
-  open Inputs
-  open Engine
-  open Dsl
+  open Inputs.Dsl
+  open Inputs.Engine
 
   open Test_common.Make (Inputs)
 
-  type network = Network.t
-
-  type node = Network.Node.t
-
-  type dsl = Dsl.t
+  let test_name = "verification-key"
 
   let config =
     let open Test_config in
@@ -96,23 +89,18 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
     ; snark_worker_fee = "0.0001"
     }
 
-  let logger = Logger.create ()
-
   let run network t =
     let open Malleable_error.Let_syntax in
+    let logger = Logger.create ~prefix:(test_name ^ " test: ") () in
     let%bind () =
       section_hard "Wait for nodes to initialize"
-        (wait_for t
-           (Wait_condition.nodes_to_initialize
-              (Core.String.Map.data (Network.all_nodes network)) ) )
+        (Wait_for.all_nodes_to_initialize t network)
     in
-    let whale1 =
-      Core.String.Map.find_exn (Network.block_producers network) "whale1"
-    in
+    let whale1 = get_bp_node network "whale1" in
     let%bind whale1_pk = pub_key_of_node whale1 in
     let%bind whale1_sk = priv_key_of_node whale1 in
     let constraint_constants = Network.constraint_constants network in
-    let (whale1_kp : Keypair.t) =
+    let whale1_kp : Keypair.t =
       { public_key = whale1_pk |> Public_key.decompress_exn
       ; private_key = whale1_sk
       }
@@ -191,8 +179,6 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
         ; authorization_kind = Signature
         }
       in
-
-      (* TODO: This is a pain. *)
       { body = body vk; authorization = Signature Signature.dummy }
     in
     let zkapp_command_create_account =
@@ -303,24 +289,17 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       call_forest_to_zkapp ~call_forest:call_forest_update_vk2
         ~nonce:Account.Nonce.(of_int 1)
     in
-    let with_timeout =
-      let soft_slots = 3 in
-      let soft_timeout = Network_time_span.Slots soft_slots in
-      let hard_timeout = Network_time_span.Slots (soft_slots * 2) in
-      Wait_condition.with_timeouts ~soft_timeout ~hard_timeout
-    in
     let wait_for_zkapp ~has_failures zkapp_command =
       let%map () =
-        wait_for t @@ with_timeout
-        @@ Wait_condition.zkapp_to_be_included_in_frontier ~has_failures
-             ~zkapp_command
+        Wait_for.zkapp_to_be_included_in_frontier t ~has_failures ~zkapp_command
+          ~soft_slots:3
       in
       [%log info] "zkApp transaction included in transition frontier"
     in
 
     let%bind () =
       section "Send a zkApp to create a zkApp account"
-        (send_zkapp ~logger whale1 zkapp_command_create_account)
+        (Zkapp_util.send ~logger whale1 zkapp_command_create_account)
     in
     let%bind () =
       section
@@ -331,21 +310,21 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       section
         "Send zkApp to update verification key to v1 and then refers to v1 in \
          the subsequent account update"
-        (send_zkapp ~logger whale1 zkapp_command_update_vk1)
+        (Zkapp_util.send ~logger whale1 zkapp_command_update_vk1)
     in
 
     let%bind () =
       section
         "Send zkApp to update to a new verification key v2 and then refers to \
          the old key v1"
-        (send_invalid_zkapp ~logger whale1 zkapp_command_update_vk2_refers_vk1
-           "Verification_failed" )
+        (Zkapp_util.send_invalid ~logger whale1
+           zkapp_command_update_vk2_refers_vk1 "Verification_failed" )
     in
     let%bind () =
       section
         "Send zkApp to update to a new verification key v2 and then refers to \
          that"
-        (send_zkapp ~logger whale1 zkapp_command_update_vk2)
+        (Zkapp_util.send ~logger whale1 zkapp_command_update_vk2)
     in
     let%bind () =
       section
