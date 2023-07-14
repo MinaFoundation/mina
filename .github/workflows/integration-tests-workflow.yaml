@@ -1,0 +1,24 @@
+---
+# .github/workflows/integration-tests-workflow.yaml
+
+name: Integration Tests Workflow
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        required: true
+        type: string
+
+jobs:
+  run-tests:
+    runs-on: minafoundation-default-runners
+    steps:
+      - name: Checkout MinaFoundation/mina
+        uses: actions/checkout@v3
+        with:
+          repository: MinaFoundation/mina
+          submodules: true
+          fetch-depth: 1
+      - name: Run Integration Tests ${{ inputs.profile }}
+        run: echo "Run Integration Tests ${{ inputs.profile }}"

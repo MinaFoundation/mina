@@ -1,0 +1,24 @@
+---
+# .github/workflows/ocaml-compiler-workflow.yaml
+
+name: OCaml Compiler Workflow
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        required: true
+        type: string
+
+jobs:
+  ocaml-compile:
+    runs-on: minafoundation-default-runners
+    steps:
+      - name: Checkout MinaFoundation/mina
+        uses: actions/checkout@v3
+        with:
+          repository: MinaFoundation/mina
+          submodules: true
+          fetch-depth: 1
+      - name: Run OCaml Compile ${{ inputs.profile }}
+        run: echo "Run OCaml Compile ${{ inputs.profile }}"
