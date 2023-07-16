@@ -11,161 +11,91 @@ concurrency:
 jobs:
 
   unit-tests-daemon:
-    name: Run Unit Tests Daemon
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Run Unit Tests Daemon
-        run: |
-          echo "Run Unit Tests Daemon"
+    uses: ./.github/workflows/unit-tests-workflow.yaml
+    with:
+      profile: Daemon
 
   unit-tests-libp2p:
-    name: Run Unit Tests Libp2p
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Run Unit Tests Libp2p
-        run: |
-          echo "Run Unit Tests Libp2p"
+    uses: ./.github/workflows/unit-tests-workflow.yaml
+    with:
+      profile: Libp2p
 
   unit-tests-archive:
-    name: Run Unit Tests Archive
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Run Unit Tests Archive
-        run: |
-          echo "Run Unit Tests Archive"
+    uses: ./.github/workflows/unit-tests-workflow.yaml
+    with:
+      profile: Archive
 
   unit-tests-rosetta:
-    name: Run Unit Tests Rosetta
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Run Unit Tests Rosetta
-        run: |
-          echo "Run Unit Tests Rosetta"
+    uses: ./.github/workflows/unit-tests-workflow.yaml
+    with:
+      profile: Rosetta
 
   build-libp2p-helper:
-    name: Build Libp2p Helper
-    runs-on: minafoundation-default-runners
+    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
     needs:
       - unit-tests-libp2p
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Build Libp2p Helper
-        run: |
-          echo "Build Libp2p Helper"
+    with:
+      profile: Libp2p Helper
 
   build-mina-daemon-light:
-    name: Build Mina Daemon Light
-    runs-on: minafoundation-default-runners
+    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
     needs:
       - unit-tests-daemon
       - build-libp2p-helper
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Build Mina Daemon Light
-        run: |
-          echo "Build Mina Daemon Light"
+    with:
+      profile: Mina Daemon Light
 
   build-mina-archive:
-    name: Build Mina Archive
-    runs-on: minafoundation-default-runners
+    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
     needs:
       - unit-tests-archive
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Build Mina Archive
-        run: |
-          echo "Build Mina Archive"
+    with:
+      profile: Mina Archive
 
   build-integration-tests-daemon:
-    name: Build Integration Tests Daemon
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Build Integration Tests Daemon
-        run: |
-          echo "Build Integration Tests Daemon"
+    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
+    with:
+      profile: Integration Tests Daemon
 
   build-integration-tests-archive:
-    name: Build Integration Tests Archive
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Build Integration Tests Archive
-        run: |
-          echo "Build Integration Tests Archive"
+    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
+    with:
+      profile: Integration Tests Archive
 
   build-integration-tests-rosetta:
-    name: Build Integration Tests Rosetta
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Build Integration Tests Rosetta
-        run: |
-          echo "Build Integration Tests Rosetta"
+    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
+    with:
+      profile: Integration Tests Rosetta
 
   build-mina-rosetta:
-    name: Build Mina Rosetta
+    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
     needs:
       - unit-tests-rosetta
       - build-mina-daemon-light
       - build-mina-archive
-    runs-on: minafoundation-default-runners
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Build Mina Rosetta
-        run: |
-          echo "Build Mina Rosetta"
+    with:
+      profile: Mina Rosetta
 
   integration-tests-daemon:
-    name: Run Integration Tests Daemon
-    runs-on: minafoundation-default-runners
+    uses: ./.github/workflows/integration-tests-workflow.yaml
     needs:
       - build-mina-daemon-light
       - build-integration-tests-daemon
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Run Integration Tests Daemon
-        run: |
-          echo "Run Integration Tests Daemon"
+    with:
+      profile: Mina Daemon
 
   integration-tests-archive:
-    name: Run Integration Tests Archive
-    runs-on: minafoundation-default-runners
+    uses: ./.github/workflows/integration-tests-workflow.yaml
     needs:
       - build-mina-archive
       - build-integration-tests-archive
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Run Integration Tests Archive
-        run: |
-          echo "Run Integration Tests Archive"
+    with:
+      profile: Mina Archive
 
   integration-tests-rosetta:
-    name: Run Integration Tests Rosetta
-    runs-on: minafoundation-default-runners
+    uses: ./.github/workflows/integration-tests-workflow.yaml
     needs:
       - build-mina-rosetta
       - build-integration-tests-rosetta
-    steps:
-      - name: Checkout MinaFoundation/mina
-        uses: actions/checkout@v3
-      - name: Run Integration Tests Archive
-        run: |
-          echo "Run Integration Tests Archive"
+    with:
+      profile: Mina Rosetta

@@ -1,0 +1,25 @@
+---
+# .github/workflows/unit-tests-workflow.yaml
+
+name: Unit Tests Workflow
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        required: true
+        type: string
+        default: 'Daemon'
+
+jobs:
+  run-tests:
+    runs-on: minafoundation-default-runners
+    steps:
+      - name: Checkout MinaFoundation/mina
+        uses: actions/checkout@v3
+        with:
+          repository: MinaFoundation/mina
+          submodules: true
+          fetch-depth: 1
+      - name: Run Unit Tests ${{ inputs.profile }}
+        run: echo "Run Unit Tests ${{ inputs.profile }}"
