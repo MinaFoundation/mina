@@ -3,6 +3,9 @@ name: 1 - Pull Requests
 
 on:
   pull_request:
+  push:
+    branches:
+      - 32-prepare-unit-tests-workflow
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
@@ -11,91 +14,96 @@ concurrency:
 jobs:
 
   unit-tests-daemon:
-    uses: ./.github/workflows/unit-tests-workflow.yaml
+    uses: ./.github/workflows/unit-tests.yaml
     with:
-      profile: Daemon
+      name: Daemon
+      command: /bin/sh -c 'sudo chown -R opam . && buildkite/scripts/unit-test.sh dev src/lib'
 
   unit-tests-libp2p:
-    uses: ./.github/workflows/unit-tests-workflow.yaml
-    with:
-      profile: Libp2p
+    uses: ./.github/workflows/unit-tests-libp2p.yaml
 
-  unit-tests-archive:
-    uses: ./.github/workflows/unit-tests-workflow.yaml
-    with:
-      profile: Archive
+  # unit-tests-snarkyjs:
+  #   uses: ./.github/workflows/unit-tests.yaml
+  #   with:
+  #     name: SnarkyJS
+  #     command: /bin/sh -c 'sudo chown -R opam . && buildkite/scripts/test-snarkyjs-bindings.sh'
 
-  unit-tests-rosetta:
-    uses: ./.github/workflows/unit-tests-workflow.yaml
-    with:
-      profile: Rosetta
+  # unit-tests-archive:
+  #   uses: ./.github/workflows/unit-tests.yaml
+  #   with:
+  #     dune_profile: Archive
 
-  build-libp2p-helper:
-    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
-    needs:
-      - unit-tests-libp2p
-    with:
-      profile: Libp2p Helper
+  # unit-tests-rosetta:
+  #   uses: ./.github/workflows/unit-tests.yaml
+  #   with:
+  #     dune_profile: Rosetta
 
-  build-mina-daemon-light:
-    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
-    needs:
-      - unit-tests-daemon
-      - build-libp2p-helper
-    with:
-      profile: Mina Daemon Light
+  # build-libp2p-helper:
+  #   uses: ./.github/workflows/compile-ocaml.yaml
+  #   needs:
+  #     - unit-tests-libp2p
+  #   with:
+  #     dune_profile: Libp2p Helper
 
-  build-mina-archive:
-    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
-    needs:
-      - unit-tests-archive
-    with:
-      profile: Mina Archive
+  # build-mina-daemon-light:
+  #   uses: ./.github/workflows/compile-ocaml.yaml
+  #   needs:
+  #     - unit-tests-daemon
+  #     - build-libp2p-helper
+  #   with:
+  #     dune_profile: Mina Daemon Light
 
-  build-integration-tests-daemon:
-    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
-    with:
-      profile: Integration Tests Daemon
+  # build-mina-archive:
+  #   uses: ./.github/workflows/compile-ocaml.yaml
+  #   needs:
+  #     - unit-tests-archive
+  #   with:
+  #     dune_profile: Mina Archive
 
-  build-integration-tests-archive:
-    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
-    with:
-      profile: Integration Tests Archive
+  # build-integration-tests-daemon:
+  #   uses: ./.github/workflows/compile-ocaml.yaml
+  #   with:
+  #     dune_profile: Integration Tests Daemon
 
-  build-integration-tests-rosetta:
-    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
-    with:
-      profile: Integration Tests Rosetta
+  # build-integration-tests-archive:
+  #   uses: ./.github/workflows/compile-ocaml.yaml
+  #   with:
+  #     dune_profile: Integration Tests Archive
 
-  build-mina-rosetta:
-    uses: ./.github/workflows/ocaml-compiler-workflow.yaml
-    needs:
-      - unit-tests-rosetta
-      - build-mina-daemon-light
-      - build-mina-archive
-    with:
-      profile: Mina Rosetta
+  # build-integration-tests-rosetta:
+  #   uses: ./.github/workflows/compile-ocaml.yaml
+  #   with:
+  #     dune_profile: Integration Tests Rosetta
 
-  integration-tests-daemon:
-    uses: ./.github/workflows/integration-tests-workflow.yaml
-    needs:
-      - build-mina-daemon-light
-      - build-integration-tests-daemon
-    with:
-      profile: Mina Daemon
+  # build-mina-rosetta:
+  #   uses: ./.github/workflows/compile-ocaml.yaml
+  #   needs:
+  #     - unit-tests-rosetta
+  #     - build-mina-daemon-light
+  #     - build-mina-archive
+  #   with:
+  #     dune_profile: Mina Rosetta
 
-  integration-tests-archive:
-    uses: ./.github/workflows/integration-tests-workflow.yaml
-    needs:
-      - build-mina-archive
-      - build-integration-tests-archive
-    with:
-      profile: Mina Archive
+  # integration-tests-daemon:
+  #   uses: ./.github/workflows/integration-tests.yaml
+  #   needs:
+  #     - build-mina-daemon-light
+  #     - build-integration-tests-daemon
+  #   with:
+  #     profile: Mina Daemon
 
-  integration-tests-rosetta:
-    uses: ./.github/workflows/integration-tests-workflow.yaml
-    needs:
-      - build-mina-rosetta
-      - build-integration-tests-rosetta
-    with:
-      profile: Mina Rosetta
+  # integration-tests-archive:
+  #   uses: ./.github/workflows/integration-tests.yaml
+  #   needs:
+  #     - build-mina-archive
+  #     - build-integration-tests-archive
+  #   with:
+  #     profile: Mina Archive
+
+  # integration-tests-rosetta:
+  #   uses: ./.github/workflows/integration-tests.yaml
+  #   needs:
+  #     - build-mina-rosetta
+  #     - build-integration-tests-rosetta
+  #   with:
+  #     profile: Mina Rosetta

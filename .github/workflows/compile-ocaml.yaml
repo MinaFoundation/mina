@@ -1,17 +1,17 @@
 ---
-# .github/workflows/integration-tests-workflow.yaml
+# .github/workflows/compile-ocaml.yaml
 
-name: Integration Tests Workflow
+name: Compile OCaml Workflow
 
 on:
   workflow_call:
     inputs:
-      profile:
+      dune_profile:
         required: true
         type: string
 
 jobs:
-  run-tests:
+  ocaml-compile:
     runs-on: minafoundation-default-runners
     steps:
       - name: Checkout MinaFoundation/mina
@@ -20,5 +20,5 @@ jobs:
           repository: MinaFoundation/mina
           submodules: true
           fetch-depth: 1
-      - name: Run Integration Tests ${{ inputs.profile }}
-        run: echo "Run Integration Tests ${{ inputs.profile }}"
+      - name: Run Compile OCaml ${{ inputs.dune_profile }}
+        run: echo "Run Compile OCaml ${{ inputs.dune_profile }}"

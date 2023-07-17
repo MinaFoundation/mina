@@ -1,0 +1,35 @@
+---
+# .github/workflows/unit-tests-libp2p.yaml
+
+name: Unit Tests Libp2p Workflow
+
+on:
+  workflow_call:
+
+jobs:
+  run-tests:
+    runs-on: minafoundation-default-runners
+    steps:
+      - name: Checkout MinaFoundation/mina
+        uses: actions/checkout@v3
+        with:
+          repository: MinaFoundation/mina
+          submodules: true
+          fetch-depth: 1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: "Docker Login"
+        run: ${{ steps. ecr-login.outputs.login-string }}
+      - name: Pull Mina Toolchain Docker Image
+        run: |
+          echo "Pull ${{ vars.MINA_TOOLCHAIN_BOOKWORM_DOCKER_IMAGE }}"
+          docker pull ${{ vars.MINA_TOOLCHAIN_BOOKWORM_DOCKER_IMAGE }}
+      - name: Run Libp2p Unit Tests
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ vars.MINA_TOOLCHAIN_BOOKWORM_DOCKER_IMAGE }}
+          options: |
+            --volume ${{ github.workspace }}:/workdir
+            --env GO=/usr/lib/go/bin/go
+          run: /bin/sh -c 'chmod -R 777 src/libp2p_ipc && make -C src/app/libp2p_helper test'

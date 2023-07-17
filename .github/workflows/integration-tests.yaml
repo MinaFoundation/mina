@@ -1,7 +1,7 @@
 ---
-# .github/workflows/ocaml-compiler-workflow.yaml
+# .github/workflows/integration-tests.yaml
 
-name: OCaml Compiler Workflow
+name: Integration Tests Workflow
 
 on:
   workflow_call:
@@ -11,7 +11,7 @@ on:
         type: string
 
 jobs:
-  ocaml-compile:
+  run-tests:
     runs-on: minafoundation-default-runners
     steps:
       - name: Checkout MinaFoundation/mina
@@ -20,5 +20,5 @@ jobs:
           repository: MinaFoundation/mina
           submodules: true
           fetch-depth: 1
-      - name: Run OCaml Compile ${{ inputs.profile }}
-        run: echo "Run OCaml Compile ${{ inputs.profile }}"
+      - name: Run Integration Tests ${{ inputs.profile }}
+        run: echo "Run Integration Tests ${{ inputs.profile }}"

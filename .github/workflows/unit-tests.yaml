@@ -1,0 +1,42 @@
+---
+# .github/workflows/unit-tests.yaml
+
+name: Unit Tests Workflow
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+      command:
+        required: true
+        type: string
+
+
+jobs:
+  run-tests:
+    runs-on: minafoundation-default-runners
+    steps:
+    - name: Checkout MinaFoundation/mina
+      uses: actions/checkout@v3
+      with:
+        repository: MinaFoundation/mina
+        submodules: true
+        fetch-depth: 1
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: "Docker Login"
+      run: ${{ steps. ecr-login.outputs.login-string }}
+    - name: Pull Mina Toolchain Docker Image
+      run: |
+        echo "Pull ${{ vars.MINA_TOOLCHAIN_BOOKWORM_DOCKER_IMAGE }}"
+        docker pull ${{ vars.MINA_TOOLCHAIN_BOOKWORM_DOCKER_IMAGE }}
+    - name: Run Unit Tests ${{ inputs.name }}
+      uses: addnab/docker-run-action@v3
+      with:
+        image: ${{ vars.MINA_TOOLCHAIN_BOOKWORM_DOCKER_IMAGE }}
+        options: |
+            --volume ${{ github.workspace }}:/workdir
+        run: ${{ inputs.command }}
