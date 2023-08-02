@@ -5,6 +5,10 @@ open Integration_test_lib
 (* exclude from bisect_ppx to avoid type error on GraphQL modules *)
 [@@@coverage exclude_file]
 
+let config_path = ref "N/A"
+
+let id _ = "cloud"
+
 let mina_archive_container_id = "archive"
 
 let mina_archive_username = "mina"
@@ -105,7 +109,8 @@ module Node = struct
     Integration_test_lib.Util.run_cmd_or_error cwd "kubectl"
       (base_kube_args config @ [ "cp"; "-c"; container_id; tmp_file; dest_file ])
 
-  let start ~fresh_state node : unit Malleable_error.t =
+  let[@warning "-27"] start ?(git_commit = "") ~fresh_state node :
+      unit Malleable_error.t =
     let open Malleable_error.Let_syntax in
     node.should_be_running <- true ;
     let%bind () =
