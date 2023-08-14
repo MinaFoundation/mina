@@ -68,23 +68,20 @@ let engines : engine list =
   ]
 
 let tests : test list =
-  [ ( "peers-reliability"
-    , (module Peers_reliability_test.Make : Intf.Test.Functor_intf) )
-  ; ( "chain-reliability"
-    , (module Chain_reliability_test.Make : Intf.Test.Functor_intf) )
-  ; ("payments", (module Payments_test.Make : Intf.Test.Functor_intf))
-  ; ("gossip-consis", (module Gossip_consistency.Make : Intf.Test.Functor_intf))
-  ; ("medium-bootstrap", (module Medium_bootstrap.Make : Intf.Test.Functor_intf))
-  ; ("zkapps", (module Zkapps.Make : Intf.Test.Functor_intf))
-  ; ("zkapps-timing", (module Zkapps_timing.Make : Intf.Test.Functor_intf))
-  ; ("zkapps-nonce", (module Zkapps_nonce_test.Make : Intf.Test.Functor_intf))
-  ; ( "verification-key"
-    , (module Verification_key_update.Make : Intf.Test.Functor_intf) )
-  ; ( "block-prod-prio"
-    , (module Block_production_priority.Make : Intf.Test.Functor_intf) )
-  ; ("snarkyjs", (module Snarkyjs.Make : Intf.Test.Functor_intf))
-  ; ("block-reward", (module Block_reward_test.Make : Intf.Test.Functor_intf))
-  ; ("hard-fork", (module Hard_fork.Make : Intf.Test.Functor_intf))
+  [ (module Block_production_priority.Make : Intf.Test.Functor_intf)
+  ; (module Block_reward_test.Make : Intf.Test.Functor_intf)
+  ; (module Chain_reliability_test.Make : Intf.Test.Functor_intf)
+  ; (module Delegation_test.Make : Intf.Test.Functor_intf)
+  ; (module Gossip_consistency.Make : Intf.Test.Functor_intf)
+  ; (module Medium_bootstrap.Make : Intf.Test.Functor_intf)
+  ; (module Mock.Make : Intf.Test.Functor_intf)
+  ; (module Payments_test.Make : Intf.Test.Functor_intf)
+  ; (module Peers_reliability_test.Make : Intf.Test.Functor_intf)
+  ; (module Snarkyjs.Make : Intf.Test.Functor_intf)
+  ; (module Verification_key_update.Make : Intf.Test.Functor_intf)
+  ; (module Zkapps.Make : Intf.Test.Functor_intf)
+  ; (module Zkapps_nonce_test.Make : Intf.Test.Functor_intf)
+  ; (module Zkapps_timing.Make : Intf.Test.Functor_intf)
   ]
 
 let report_test_errors ~log_error_set ~internal_error_set =
@@ -434,6 +431,14 @@ let config_path_arg =
     & opt (some non_dir_file) None
     & info [ "config-path"; "config" ] ~env ~docv:"MINA_CI_CONFIG_PATH" ~doc)
 
+let alias_arg =
+  let doc = "Alias to use for the mock network binary." in
+  let env = Arg.env_var "MOCK_NETWORK" ~doc in
+  Arg.(
+    value
+    & opt (some @@ pair ~sep:',' string string) None
+    & info [ "mock-network"; "mock"; "alias" ] ~env ~docv:"MOCK_NETWORK" ~doc)
+
 let mina_image_arg =
   let doc = "Identifier of the Mina docker image to test." in
   let env = Arg.env_var "MINA_IMAGE" ~doc in
@@ -475,10 +480,10 @@ let engine_cmd ((engine_name, (module Engine)) : engine) =
   let info = info engine_name in
   let module Inputs = Make_test_inputs (Engine) () in
   let set_config path =
-    (* TODO: deal with path relativity? *)
     Option.iter path ~f:(fun p -> Engine.Network.config_path := p) ;
     path
   in
+  let set_alias alias = Engine.Network.alias := alias in
   let test_inputs_with_cli_inputs_arg =
     let wrap_cli_inputs cli_inputs =
       Test_inputs_with_cli_inputs ((module Inputs), cli_inputs)
@@ -487,14 +492,15 @@ let engine_cmd ((engine_name, (module Engine)) : engine) =
   in
   let inputs_term =
     let cons_inputs test_inputs test archive_image debug mina_image config_path
-        =
+        _ =
       { test_inputs; test; mina_image; archive_image; debug; config_path }
     in
     Term.(
       const cons_inputs $ test_inputs_with_cli_inputs_arg
       $ test_arg (module Inputs)
       $ archive_image_arg $ debug_arg $ mina_image_arg
-      $ (const set_config $ config_path_arg))
+      $ (const set_config $ config_path_arg)
+      $ (const set_alias $ alias_arg))
   in
   (Term.(const start $ inputs_term), info)
 
