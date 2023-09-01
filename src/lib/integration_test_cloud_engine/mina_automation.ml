@@ -115,9 +115,7 @@ module Network_config = struct
         ; epoch_data
         ; archive_nodes
         ; block_producers
-        ; seed_nodes
         ; snark_coordinator
-        ; snark_workers
         ; snark_worker_fee
         ; log_precomputed_blocks (* ; num_plain_nodes *)
         ; proof_config
@@ -126,18 +124,10 @@ module Network_config = struct
         ; slots_per_epoch
         ; slots_per_sub_window
         ; txpool_max_size
+        ; _
         } =
       test_config
     in
-    List.iter archive_nodes ~f:(fun x ->
-        Test_config.Archive_node.to_yojson x
-        |> Yojson.Safe.pretty_to_string |> print_endline ) ;
-    List.iter seed_nodes ~f:(fun x ->
-        Test_config.Seed_node.to_yojson x
-        |> Yojson.Safe.pretty_to_string |> print_endline ) ;
-    List.iter snark_workers ~f:(fun x ->
-        Test_config.Snark_worker_node.to_yojson x
-        |> Yojson.Safe.pretty_to_string |> print_endline ) ;
     let user_from_env = Option.value (Unix.getenv "USER") ~default:"auto" in
     let user_sanitized =
       Str.global_replace (Str.regexp "\\W|_-") "" user_from_env
@@ -352,12 +342,6 @@ module Network_config = struct
       { constraints = constraint_constants; genesis = genesis_constants }
     in
     (* BLOCK PRODUCER CONFIG *)
-    let mk_net_keypair keypair_name (pk, sk) =
-      let keypair =
-        { Keypair.public_key = Public_key.decompress_exn pk; private_key = sk }
-      in
-      Network_keypair.create_network_keypair ~keypair_name ~keypair
-    in
     let block_producer_config name keypair =
       { name; keypair; libp2p_secret = "" }
     in
@@ -433,7 +417,6 @@ module Network_config = struct
             ; worker_nodes = node.worker_nodes
             }
     in
-
     (* NETWORK CONFIG *)
     { mina_automation_location = cli_inputs.mina_automation_location
     ; debug_arg = debug
