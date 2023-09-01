@@ -113,10 +113,12 @@ module Network_config = struct
     let { requires_graphql
         ; genesis_ledger
         ; epoch_data
+        ; archive_nodes
         ; block_producers
+        ; seed_nodes
         ; snark_coordinator
+        ; snark_workers
         ; snark_worker_fee
-        ; num_archive_nodes
         ; log_precomputed_blocks (* ; num_plain_nodes *)
         ; proof_config
         ; Test_config.k
@@ -127,6 +129,15 @@ module Network_config = struct
         } =
       test_config
     in
+    List.iter archive_nodes ~f:(fun x ->
+        Test_config.Archive_node.to_yojson x
+        |> Yojson.Safe.pretty_to_string |> print_endline ) ;
+    List.iter seed_nodes ~f:(fun x ->
+        Test_config.Seed_node.to_yojson x
+        |> Yojson.Safe.pretty_to_string |> print_endline ) ;
+    List.iter snark_workers ~f:(fun x ->
+        Test_config.Snark_worker_node.to_yojson x
+        |> Yojson.Safe.pretty_to_string |> print_endline ) ;
     let user_from_env = Option.value (Unix.getenv "USER") ~default:"auto" in
     let user_sanitized =
       Str.global_replace (Str.regexp "\\W|_-") "" user_from_env
@@ -442,7 +453,7 @@ module Network_config = struct
         ; runtime_config = Runtime_config.to_yojson runtime_config
         ; block_producer_configs
         ; log_precomputed_blocks
-        ; archive_node_count = num_archive_nodes
+        ; archive_node_count = List.length archive_nodes
         ; mina_archive_schema
         ; mina_archive_schema_aux_files
         ; snark_coordinator_config

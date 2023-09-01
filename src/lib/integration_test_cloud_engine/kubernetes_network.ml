@@ -7,7 +7,13 @@ open Integration_test_lib
 
 let alias : (string * string) option ref = ref None
 
+let archive_image : string option ref = ref None
+
 let config_path = ref "N/A"
+
+let keypairs_path = ref ""
+
+let mina_image = ref ""
 
 let id _ = "cloud"
 
@@ -111,8 +117,7 @@ module Node = struct
     Integration_test_lib.Util.run_cmd_or_error cwd "kubectl"
       (base_kube_args config @ [ "cp"; "-c"; container_id; tmp_file; dest_file ])
 
-  let[@warning "-27"] start ?(git_commit = "") ~fresh_state node :
-      unit Malleable_error.t =
+  let start ~fresh_state node : unit Malleable_error.t =
     let open Malleable_error.Let_syntax in
     node.should_be_running <- true ;
     let%bind () =
