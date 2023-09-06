@@ -326,7 +326,7 @@ let topology_of_test_config t private_keys libp2p_keypairs libp2p_peerids :
         ; role = Block_producer
         ; docker_image
         ; libp2p_pass
-        ; libp2p_keyfile = "" (* value set in network_config.ml*)
+        ; libp2p_keyfile = "instantiated in network_config.ml"
         ; libp2p_keypair = List.nth_exn libp2p_keypairs n
         ; libp2p_peerid = `String List.(nth_exn libp2p_peerids n)
         } )
@@ -356,8 +356,8 @@ let topology_of_test_config t private_keys libp2p_keypairs libp2p_peerids :
         ; sk
         ; role = Archive_node
         ; docker_image
-        ; schema_file = "" (* value set in network_config.ml*)
-        ; zkapp_file = "" (* value set in network_config.ml*)
+        ; schema_file = "instantiated in network_config.ml"
+        ; zkapp_file = "instantiated in network_config.ml"
         } )
   in
   let topology_of_seed n { Seed_node.node_name; docker_image; _ } :
@@ -371,7 +371,7 @@ let topology_of_test_config t private_keys libp2p_keypairs libp2p_peerids :
         ; role = Seed_node
         ; docker_image
         ; libp2p_pass
-        ; libp2p_keyfile = "" (* value set in network_config.ml*)
+        ; libp2p_keyfile = "instantiated in network_config.ml"
         ; libp2p_keypair = List.nth_exn libp2p_keypairs n
         ; libp2p_peerid = `String List.(nth_exn libp2p_peerids n)
         } )
