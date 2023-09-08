@@ -342,6 +342,12 @@ module Network_config = struct
       { constraints = constraint_constants; genesis = genesis_constants }
     in
     (* BLOCK PRODUCER CONFIG *)
+    let mk_net_keypair keypair_name (pk, sk) =
+      let keypair =
+        { Keypair.public_key = Public_key.decompress_exn pk; private_key = sk }
+      in
+      Network_keypair.create_network_keypair ~keypair_name ~keypair
+    in
     let block_producer_config name keypair =
       { name; keypair; libp2p_secret = "" }
     in
@@ -417,6 +423,7 @@ module Network_config = struct
             ; worker_nodes = node.worker_nodes
             }
     in
+
     (* NETWORK CONFIG *)
     { mina_automation_location = cli_inputs.mina_automation_location
     ; debug_arg = debug
