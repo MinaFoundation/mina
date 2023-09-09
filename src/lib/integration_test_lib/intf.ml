@@ -60,7 +60,33 @@ module Engine = struct
       *)
       val should_be_running : t -> bool
 
+<<<<<<< HEAD
       val get_ingress_uri : t -> Uri.t
+=======
+      val get_pooled_zkapp_commands :
+           logger:Logger.t
+        -> t
+        -> pk:Signature_lib.Public_key.Compressed.t
+        -> string list Deferred.Or_error.t
+
+      val get_peer_id :
+        logger:Logger.t -> t -> (string * string list) Deferred.Or_error.t
+
+      val must_get_peer_id :
+        logger:Logger.t -> t -> (string * string list) Malleable_error.t
+
+      val get_best_chain :
+           ?max_length:int
+        -> logger:Logger.t
+        -> t
+        -> best_chain_block list Deferred.Or_error.t
+
+      val must_get_best_chain :
+           ?max_length:int
+        -> logger:Logger.t
+        -> t
+        -> best_chain_block list Malleable_error.t
+>>>>>>> 6131f41e37 ((intg test) Undo function renaming)
 
       val dump_archive_data :
         logger:Logger.t -> t -> data_file:string -> unit Malleable_error.t
