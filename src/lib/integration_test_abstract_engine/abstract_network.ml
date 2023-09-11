@@ -1104,7 +1104,10 @@ module Node = struct
   let run_replayer ~logger (t : t) =
     [%log info] "Running replayer on archived data node: %s" t.node_id ;
     let args =
-      [ ("network_id", `String t.network_id); ("node_id", `String t.node_id) ]
+      [ ("network_id", `String t.network_id)
+      ; ("node_id", `String t.node_id)
+      ; ("start_slot_since_genesis", `Int start_slot_since_genesis)
+      ]
     in
     try
       let%bind replay =
