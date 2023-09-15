@@ -32,7 +32,7 @@ type inputs =
   ; debug : bool
   ; config_path : string option
   ; keypairs_path : string option
-  ; network_runner_alias : (string * string) option
+  ; network_runner : string option
   }
 
 let test_name (test : test)
@@ -59,7 +59,7 @@ let validate_inputs ~logger inputs (test_config : Test_config.t) :
     in
     if
       String.(Inputs.Engine.name = "abstract")
-      && Option.is_none inputs.network_runner_alias
+      && Option.is_none inputs.network_runner
       && (Option.is_none @@ Sys.getenv "MINA_NETWORK_RUNNER")
     then (
       [%log fatal]
@@ -80,7 +80,7 @@ let validate_inputs ~logger inputs (test_config : Test_config.t) :
               exit 1
           | Some path ->
               [%log info] "Using network runner: %s"
-                (Option.value_exn inputs.network_runner_alias |> snd) ;
+                (Option.value_exn inputs.network_runner) ;
               let keypairs_ls = Stdlib.Sys.readdir path in
               (* check network-keypairs *)
               if
@@ -328,7 +328,7 @@ let main inputs =
   let error_accumulator_ref = ref None in
   let network_state_writer_ref = ref None in
   let cleanup_deferred_ref = ref None in
-  [%log trace] "preparing up cleanup phase" ;
+  [%log trace] "preparing cleanup phase" ;
   let f_dispatch_cleanup =
     let pause_cleanup_func () =
       if inputs.debug then
@@ -482,7 +482,7 @@ let config_path_arg =
     & opt (some non_dir_file) None
     & info [ "config-path"; "config" ] ~env ~docv:"MINA_CI_CONFIG_PATH" ~doc)
 
-let network_runner_alias_arg =
+let network_runner_arg =
   let doc = "Alias for the network runner binary." in
   let env = Arg.env_var "MINA_NETWORK_RUNNER" ~doc in
   Arg.(
@@ -556,10 +556,9 @@ let engine_cmd ((engine_name, (module Engine)) : engine) =
     Engine.Network.archive_image := image ;
     image
   in
-  let set_alias alias =
-    let alias = Option.map alias ~f:(fun a -> ("MOCK_NETWORK", a)) in
-    Engine.Network.network_runner_alias := alias ;
-    alias
+  let set_network_runner network_runner =
+    Engine.Network.network_runner := network_runner ;
+    network_runner
   in
   let test_inputs_with_cli_inputs_arg =
     let wrap_cli_inputs cli_inputs =
@@ -569,7 +568,7 @@ let engine_cmd ((engine_name, (module Engine)) : engine) =
   in
   let inputs_term =
     let cons_inputs test_inputs test debug archive_image mina_image config_path
-        keypairs_path network_runner_alias =
+        keypairs_path network_runner =
       { test_inputs
       ; test
       ; mina_image
@@ -577,7 +576,7 @@ let engine_cmd ((engine_name, (module Engine)) : engine) =
       ; debug
       ; config_path
       ; keypairs_path
-      ; network_runner_alias
+      ; network_runner
       }
     in
     Term.(
@@ -588,7 +587,7 @@ let engine_cmd ((engine_name, (module Engine)) : engine) =
       $ (const set_mina_image $ mina_image_arg)
       $ (const set_config $ config_path_arg)
       $ (const set_keypair $ keypair_dir_path_arg)
-      $ (const set_alias $ network_runner_alias_arg))
+      $ (const set_network_runner $ network_runner_arg))
   in
   (Term.(const start $ inputs_term), info)
 
