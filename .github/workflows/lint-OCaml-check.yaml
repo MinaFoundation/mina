@@ -20,4 +20,5 @@ jobs:
       - name: OCaml-check-change
         run: |
           echo "workspace ${{ github.workspace }} and workflow ${{ github.workflow }}"
+          sudo su opam
           ./buildkite/scripts/lint-check-format.sh && ./scripts/require-ppxs.py
