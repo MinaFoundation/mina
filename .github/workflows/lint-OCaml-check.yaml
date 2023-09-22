@@ -4,19 +4,20 @@ name: OCaml Lints; Check-format, Require-ppx-version
 
 on:
   workflow_call:
+  push:
+    branches: [28-analyze-dhall-files]
 
 jobs:
   run-tests:
     runs-on: minafoundation-toolchain-jammy-runners
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: MinaFoundation/mina
           submodules: true
           fetch-depth: 1
       - name: OCaml-check-change
         run: |
-          pwd && echo "checking dir up" && ls -lh ../
-          echo "workspace ${{ github.workspace }} and workplace ${{ github.workplace }}"
+          echo "workspace ${{ github.workspace }} and workflow ${{ github.workflow }}"
           ./buildkite/scripts/lint-check-format.sh && ./scripts/require-ppxs.py
