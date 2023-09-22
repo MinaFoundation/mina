@@ -67,9 +67,10 @@ module Epoch_data = struct
   module Data = struct
     (* the seed is a field value in Base58Check format *)
     type t = { epoch_ledger : Test_Account.t list; epoch_seed : string }
+    [@@deriving to_yojson]
   end
 
-  type t = { staking : Data.t; next : Data.t option }
+  type t = { staking : Data.t; next : Data.t option } [@@deriving to_yojson]
 end
 
 module Git_build = struct

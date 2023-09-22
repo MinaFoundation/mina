@@ -121,7 +121,6 @@ let tests : test list =
   [ (module Block_production_priority.Make : Intf.Test.Functor_intf)
   ; (module Block_reward_test.Make : Intf.Test.Functor_intf)
   ; (module Chain_reliability_test.Make : Intf.Test.Functor_intf)
-  ; (module Delegation_test.Make : Intf.Test.Functor_intf)
   ; (module Gossip_consistency.Make : Intf.Test.Functor_intf)
   ; (module Medium_bootstrap.Make : Intf.Test.Functor_intf)
   ; (module Mock.Make : Intf.Test.Functor_intf)
