@@ -58,13 +58,16 @@ let parse_event_from_log_entry ~logger log_entry =
 let rec poll_get_filtered_log_entries_node ~logger ~event_writer
     ~last_log_index_seen node =
   let open Deferred.Let_syntax in
+  [%log info] "EJ - Logging in poll_get_filtered_log_entries_node #1" ;
   if not (Pipe.is_closed event_writer) then (
+    [%log info] "EJ - Logging in poll_get_filtered_log_entries_node #2" ;
     let%bind () = after (Time.Span.of_ms 10000.0) in
     match%bind
       Graphql_requests.get_filtered_log_entries ~last_log_index_seen
       @@ Node.get_ingress_uri node
     with
     | Ok log_entries ->
+        [%log info] "EJ - Logging in poll_get_filtered_log_entries_node #3" ;
         Array.iter log_entries ~f:(fun log_entry ->
             match parse_event_from_log_entry ~logger log_entry with
             | Ok a ->
