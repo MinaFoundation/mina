@@ -20,4 +20,9 @@ jobs:
       - name: OCaml-check-change
         run: |
           echo "workspace ${{ github.workspace }}"
+          opam switch import opam.export --quiet
+          eval $(opam config env) \
+          && ./scripts/pin-external-packages.sh \
+          && opam clean --logs -cs --quiet
+
           ./buildkite/scripts/lint-check-format.sh && ./scripts/require-ppxs.py
