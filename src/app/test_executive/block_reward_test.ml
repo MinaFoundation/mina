@@ -20,7 +20,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
         ; test_account "node1-key" "1000"
         ; test_account "node2-key" "0"
         ]
-    ; block_producers = [ bp "node" (); bp "node1" (); bp "node2" () ]
+    ; block_producers = [ bp "node" (); bp "node1" () ]
     }
 
   let run network t =
