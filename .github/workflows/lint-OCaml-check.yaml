@@ -14,15 +14,22 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
-          repository: MinaFoundation/mina
-          submodules: true
+          submodules: 'recursive'
           fetch-depth: 1
-      - name: OCaml-check-change
+      - name: 🧩 Get opam dependency cache
+        uses: actions/cache@v3.3.2
+        id: opam_dependencies
+        with:
+          path: ~/.opam
+          key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
+      - name: 🏗️ Build opam dependencies
         run: |
-          echo "workspace ${{ github.workspace }}"
           opam switch import opam.export --quiet
           eval $(opam config env) \
           && ./scripts/pin-external-packages.sh \
           && opam clean --logs -cs --quiet
 
+      - name: OCaml-check-change
+        run: |
+          echo "workspace ${{ github.workspace }}"
           ./buildkite/scripts/lint-check-format.sh && ./scripts/require-ppxs.py
