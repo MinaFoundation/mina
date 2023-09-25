@@ -21,6 +21,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
         ; test_account "node2-key" "0"
         ]
     ; block_producers = [ bp "node" (); bp "node1" () ]
+    ; seed_nodes = [ seed "node3" (); seed "node4" () ]
     }
 
   let run network t =
