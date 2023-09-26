@@ -44,4 +44,4 @@ jobs:
           && opam clean --logs -cs --quiet
       - name: 📝 OCaml Lints
         if: steps.changes.outputs.src == true
-        uses: ./.github/composite-workflows/lint-OCaml-check.yaml
+        uses: ./.github/templates/composite/lint-OCaml-check.yaml
