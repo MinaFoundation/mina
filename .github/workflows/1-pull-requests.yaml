@@ -21,15 +21,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-          fetch-depth: 1
-      - uses: dorny/paths-filter@v2
-        id: changes
+      - uses: tj-actions/changed-files@v39
+        id: changed
         with:
-           filters: |
-              src:
-                - 'src/**'
-              rfcs:
-                - 'rfcs/**'
+          files_yaml: |
+            src:
+              - 'src/**'
+            rfcs:
+              - 'rfcs/**'
       - name: 🧩 Get opam dependency cache
         uses: actions/cache@v3
         id: opam_dependencies
@@ -43,5 +42,5 @@ jobs:
           && ./scripts/pin-external-packages.sh \
           && opam clean --logs -cs --quiet
       - name: 📝 OCaml Lints
-        if: steps.changes.outputs.src == 'true'
+        if: steps.changed.outputs.src_any_changed == 'true'
         uses: ./.github/templates/composite/lint-OCaml-check.yaml
