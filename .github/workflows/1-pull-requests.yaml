@@ -2,15 +2,46 @@
 name: 1 - Pull Requests
 
 on:
-  pull_request:
   push:
     branches:
       - 28-analyze-dhall-files
+    paths:
+      - 'src/**'
+      - 'rfcs/**'
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
   cancel-in-progress: true
 
 jobs:
-  lint-OCaml-check:
-    uses: ./.github/workflows/lint-OCaml-check.yaml
+  check-linting:
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+           filters: |
+              src:
+                - 'src/**'
+              rfcs:
+                - 'rfcs/**'
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 1
+      - name: 🧩 Get opam dependency cache
+        uses: actions/cache@v3
+        id: opam_dependencies
+        with:
+          path: ~/.opam
+          key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
+      - name: 🏗️ Build opam dependencies
+        run: |
+          opam switch import opam.export --quiet
+          eval $(opam config env) \
+          && ./scripts/pin-external-packages.sh \
+          && opam clean --logs -cs --quiet
+      - name: 📝 OCaml Lints
+        #if: steps.changes.outputs.src == true
+        uses: ./.github/composite-workflows/lint-OCaml-check.yaml
