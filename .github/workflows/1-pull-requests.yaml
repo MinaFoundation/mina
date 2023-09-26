@@ -43,5 +43,5 @@ jobs:
           && ./scripts/pin-external-packages.sh \
           && opam clean --logs -cs --quiet
       - name: 📝 OCaml Lints
-        #if: steps.changes.outputs.src == true
+        if: steps.changes.outputs.src == true
         uses: ./.github/composite-workflows/lint-OCaml-check.yaml
