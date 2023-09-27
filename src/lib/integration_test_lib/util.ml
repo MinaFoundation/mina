@@ -24,28 +24,28 @@ let drop_outer_quotes s =
   s
 
 (** Pulls [num_keypairs] unique keypairs from [path] *)
-let pull_keypairs path num_keypairs =
-  let random =
-    Random.State.make_self_init () |> Splittable_random.State.create
-  in
-  (* elem must be in list *)
-  let drop_elem list elem =
-    let open List in
-    let idx = findi list ~f:(fun _ x -> x = elem) |> Option.value_exn |> fst in
-    let left, right = split_n list idx in
-    match right with [] -> left | _ :: tl -> left @ tl
-  in
-  let random_nums =
-    let rec aux rem acc n =
-      let open Quickcheck.Generator in
-      if n = 0 then acc
-      else
-        let next = of_list rem |> generate ~size:num_keypairs ~random in
-        let rem = drop_elem rem next in
-        aux rem (next :: acc) (n - 1)
-    in
-    aux (List.range ~stop:`inclusive 1 10_000) [] num_keypairs
-  in
+let pull_keypairs path =
+  (* let random =
+       Random.State.make_self_init () |> Splittable_random.State.create
+     in
+     (* elem must be in list *)
+     let drop_elem list elem =
+       let open List in
+       let idx = findi list ~f:(fun _ x -> x = elem) |> Option.value_exn |> fst in
+       let left, right = split_n list idx in
+       match right with [] -> left | _ :: tl -> left @ tl
+     in
+     let random_nums =
+       let rec aux rem acc n =
+         let open Quickcheck.Generator in
+         if n = 0 then acc
+         else
+           let next = of_list rem |> generate ~size:num_keypairs ~random in
+           let rem = drop_elem rem next in
+           aux rem (next :: acc) (n - 1)
+       in
+       aux (List.range ~stop:`inclusive 1 10) [] num_keypairs
+     in *)
   (* network keypairs + private keys *)
   let keypair_name = sprintf "network-keypairs/network-keypair-%d" in
   let base_filename n = path ^/ keypair_name n ^ ".json" in
@@ -72,10 +72,10 @@ let pull_keypairs path num_keypairs =
     if suffix raw 1 = "\n" then drop_suffix raw 1 else raw
   in
   let read_libp2p n = Yojson.Safe.from_file (libp2p_base_filename n) in
-  ( List.map random_nums ~f:read_keypair
-  , List.map random_nums ~f:read_sk
-  , List.map random_nums ~f:read_libp2p
-  , List.map random_nums ~f:read_peerid )
+  ( List.map (List.range ~stop:`inclusive 1 10) ~f:read_keypair
+  , List.map (List.range ~stop:`inclusive 1 10) ~f:read_sk
+  , List.map (List.range ~stop:`inclusive 1 10) ~f:read_libp2p
+  , List.map (List.range ~stop:`inclusive 1 10) ~f:read_peerid )
 
 let check_cmd_output ~prog ~args output =
   let open Process.Output in

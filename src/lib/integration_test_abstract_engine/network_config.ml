@@ -127,11 +127,10 @@ let expand ~logger ~test_name ~(cli_inputs : Cli_inputs.t) ~(debug : bool)
   let before = Time.now () in
   let num_keypairs = List.length genesis_ledger in
   let network_keypairs, private_keys, libp2p_keypairs, libp2p_peerids =
-    let max_num_nodes =
-      List.length archive_nodes + List.length block_producers + 10
-    in
+    (* let max_num_nodes =
+         List.length archive_nodes + List.length block_producers + 10
+       in *)
     Util.pull_keypairs !keypairs_path
-      (List.length genesis_ledger + max_num_nodes)
   in
   [%log trace] "Pulled %d keypairs from %s in %s" num_keypairs !keypairs_path
     Time.(abs_diff before @@ now () |> Span.to_string) ;
