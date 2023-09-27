@@ -1,0 +1,15 @@
+# .github/actions/fast-lint/action.yaml
+---
+name: Fast lint checks
+description: Fast lint steps; CODEOWNERs, RFCs, Check Snarky Submodule, Preprocessor Deps
+
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        ./scripts/lint_codeowners.sh
+        ./scripts/lint_rfcs.sh
+        make check-snarky-submodule
+        ./scripts/lint_preprocessor_deps.sh
+        ./scripts/compare_ci_diff_types.sh
+      shell: bash

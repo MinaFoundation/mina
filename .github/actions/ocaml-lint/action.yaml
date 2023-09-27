@@ -1,4 +1,4 @@
-# .github/workflows/lint-OCaml-check.yaml
+# .github/actions/ocaml-lint/action.yaml
 ---
 name: OCaml lint checks
 description: OCaml Lints; Check-format, Require-ppx-version
@@ -8,4 +8,4 @@ runs:
   steps:
     - run: |
         ./buildkite/scripts/lint-check-format.sh && ./scripts/require-ppxs.py
-      shell: sh
+      shell: bash

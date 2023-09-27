@@ -43,4 +43,7 @@ jobs:
           && opam clean --logs -cs --quiet
       - name: 📝 OCaml Lints
         if: steps.changed.outputs.src_any_changed == 'true'
-        uses: ./.github/workflows/composite/ocaml-lint
+        uses: ./.github/actions/ocaml-lint
+      - name: 📝 Fast Lints
+        if: steps.changed.outputs.src_any_changed == 'true' || steps.changed.outputs.rfcs_any_changed == 'true'
+        uses: ./.github/actions/fast-lint
