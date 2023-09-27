@@ -2,6 +2,10 @@
 ---
 name: Fast lint checks
 description: Fast lint steps; CODEOWNERs, RFCs, Check Snarky Submodule, Preprocessor Deps
+inputs:
+  ref_name:
+    description: Branch that triggered the workflow run.
+    required: true
 
 runs:
   using: "composite"

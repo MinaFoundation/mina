@@ -20,7 +20,10 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          fetch-depth: 0
+          submodules: recursive
+      - name: 📥 Checkout git submodules
+        run: git submodule update --recursive --remote --init
       - uses: tj-actions/changed-files@v39
         id: changed
         with:
@@ -29,6 +32,9 @@ jobs:
               - 'src/**'
             rfcs:
               - 'rfcs/**'
+            xref:
+              - '*.md'
+              - '.xrefcheck.yml'
       - name: 🧩 Get opam dependency cache
         uses: actions/cache@v3
         id: opam_dependencies
@@ -47,3 +53,8 @@ jobs:
       - name: 📝 Fast Lints
         if: steps.changed.outputs.src_any_changed == 'true' || steps.changed.outputs.rfcs_any_changed == 'true'
         uses: ./.github/actions/fast-lint
+        with:
+          ref_name: ${{ github.ref_name }}
+      - name: 📝 Xrefcheck
+        if: steps.changed.outputs.xref_any_changed == 'true'
+        uses: serokell/xrefcheck-action@v1
