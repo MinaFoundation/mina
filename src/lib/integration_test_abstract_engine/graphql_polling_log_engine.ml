@@ -65,16 +65,10 @@ let rec poll_get_filtered_log_entries_node ~logger ~event_writer
       @@ Node.get_ingress_uri node
     with
     | Ok log_entries ->
-        [%log info]
-          "EJ - Logging in poll_get_filtered_log_entries_node #3 %s with log \
-           entries %d"
-          (Node.id node) (Array.length log_entries) ;
-
         Array.iter log_entries ~f:(fun log_entry ->
             match parse_event_from_log_entry ~logger log_entry with
             | Ok a ->
-                [%log info] "Parsed %s's log entry with entry %s" (Node.id node)
-                  log_entry ;
+                [%log info] "Parsed %s's log entry" @@ Node.id node ;
                 Pipe.write_without_pushback_if_open event_writer (node, a)
             | Error e ->
                 [%log info] "Error parsing log $error"
