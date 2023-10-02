@@ -32,8 +32,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
         ; test_account "fish1" "100"
         ; test_account "fish2" "100"
         ]
-    ; block_producers =
-        [ bp "untimed-node-a" (); bp "untimed-node-b" (); bp "timed-node-c" () ]
+    ; block_producers = [ bp "untimed-node-a" () ]
     ; snark_coordinator = snark "snark-node" ~account_name:"snark-node-key1" 4
     ; snark_worker_fee = "0.0002"
     ; archive_nodes = [ archive "archive-node" () ]
