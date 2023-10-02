@@ -65,6 +65,10 @@ let rec poll_get_filtered_log_entries_node ~logger ~event_writer
       @@ Node.get_ingress_uri node
     with
     | Ok log_entries ->
+        [%log info]
+          "EJ - The node %s's has %d more filtered entries with a last seen \
+           index of %d"
+          (Node.id node) (Array.length log_entries) last_log_index_seen ;
         Array.iter log_entries ~f:(fun log_entry ->
             match parse_event_from_log_entry ~logger log_entry with
             | Ok a ->
@@ -76,6 +80,8 @@ let rec poll_get_filtered_log_entries_node ~logger ~event_writer
         let last_log_index_seen =
           Array.length log_entries + last_log_index_seen
         in
+        [%log info] "EJ - The node %s's has new log_last_seen_index %d"
+          (Node.id node) last_log_index_seen ;
         poll_get_filtered_log_entries_node ~logger ~event_writer
           ~last_log_index_seen node
     | Error err ->
