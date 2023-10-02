@@ -137,6 +137,8 @@ let poll_for_logs_in_background ~log_filter ~logger ~network ~event_writer =
 let create ~logger ~(network : Abstract_network.t) =
   let open Deferred.Or_error.Let_syntax in
   let log_filter = all_event_types_log_filter in
+  [%log info] "EJ - Here is the log_filter %s"
+    (List.fold_left log_filter ~init:"" ~f:(fun i x -> i ^ x)) ;
   let event_reader, event_writer = Pipe.create () in
   let background_job =
     poll_for_logs_in_background ~log_filter ~logger ~network ~event_writer
