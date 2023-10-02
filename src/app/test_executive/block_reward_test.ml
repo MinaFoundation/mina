@@ -21,10 +21,7 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
         ; test_account "node2-key" "1000"
         ]
     ; block_producers = [ bp "node" (); bp "node1" (); bp "node2" () ]
-    ; snark_coordinator =
-        snark "snark-node" ~account_name:"snark-node-key1" 4
-        (* ; snark_worker_fee = "0.0002" *)
-    }
+      }
 
   let run network t =
     let open Malleable_error.Let_syntax in
