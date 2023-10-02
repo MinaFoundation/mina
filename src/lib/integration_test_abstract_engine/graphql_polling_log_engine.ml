@@ -105,6 +105,8 @@ let rec poll_start_filtered_log_node ~logger ~log_filter ~event_writer node =
       @@ Node.get_ingress_uri node
     with
     | Ok () ->
+        [%log info] "Filtered logs Started"
+          ~metadata:[ ("node", `String node.node_id) ] ;
         return (Ok ())
     | Error _ ->
         poll_start_filtered_log_node ~logger ~log_filter ~event_writer node
