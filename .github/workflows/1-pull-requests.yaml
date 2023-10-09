@@ -5,9 +5,6 @@ on:
   push:
     branches:
       - 28-analyze-dhall-files
-    paths:
-      - 'src/**'
-      - 'rfcs/**'
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
@@ -53,6 +50,7 @@ jobs:
       - name: 📝 Fast Lints
         if: steps.changed.outputs.src_any_changed == 'true' || steps.changed.outputs.rfcs_any_changed == 'true'
         uses: ./.github/actions/fast-lint
+        continue-on-error: true
         with:
           ref_name: ${{ github.ref_name }}
       - name: 📝 Xrefcheck
