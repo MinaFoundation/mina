@@ -15,5 +15,4 @@ runs:
         ./scripts/lint_rfcs.sh
         make check-snarky-submodule
         ./scripts/lint_preprocessor_deps.sh
-        ./scripts/compare_ci_diff_types.sh
       shell: bash

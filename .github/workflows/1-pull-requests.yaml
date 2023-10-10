@@ -56,3 +56,5 @@ jobs:
       - name: 📝 Xrefcheck
         if: steps.changed.outputs.xref_any_changed == 'true'
         uses: serokell/xrefcheck-action@v1
+        with:
+          xrefcheck-version: 0.1.2
