@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
       - name: 📥 Checkout git submodules
-        run: git submodule update --recursive --remote --init
+        run: git submodule update --recursive --remote
       - uses: tj-actions/changed-files@v39
         id: changed
         with:
@@ -30,7 +30,7 @@ jobs:
             rfcs:
               - 'rfcs/**'
             xref:
-              - '*.md'
+              - '**/*.{md}'
               - '.xrefcheck.yaml'
       - name: 🧩 Get opam dependency cache
         uses: actions/cache@v3
@@ -57,4 +57,6 @@ jobs:
         if: steps.changed.outputs.xref_any_changed == 'true'
         uses: serokell/xrefcheck-action@v1
         with:
-          xrefcheck-version: 0.1.2
+          xrefcheck-version: 0.2
+      - name: 📝 Validation service
+        uses: ./.github/actions/validation-service
