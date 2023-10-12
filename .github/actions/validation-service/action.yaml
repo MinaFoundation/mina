@@ -2,17 +2,11 @@
 ---
 name: Validation Service
 description: Validation service lint steps; employs various forms static analysis on the elixir codebase
-inputs:
-  elixir-tag:
-    required: false
-    description: 'Image tag of elixir to use.'
-    default: '1.10-alpine'
 
 runs:
-  using: docker
-  image: elixir:${{ inputs.elixir-tag }}
+  using: 'docker'
+  image: 'elixir:1.10-alpine'
+  entrypoint: sh
   args:
-    - 'cd /github/workspace/src/app/validation'
-    - 'mix local.hex --force'
-    - 'mix local.rebar --force'
-    - 'mix deps.get'
+    - -c
+    - cd src/app/validation && mix local.hex --force && mix local.rebar --force && mix deps.get && mix check --force

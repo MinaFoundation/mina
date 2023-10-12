@@ -17,10 +17,7 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           submodules: recursive
-      - name: 📥 Checkout git submodules
-        run: git submodule update --recursive --remote
       - uses: tj-actions/changed-files@v39
         id: changed
         with:
