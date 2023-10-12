@@ -4,7 +4,7 @@ name: 1 - Pull Requests
 on:
   push:
     branches:
-      - 28-analyze-dhall-files
+      - 29-analyze-dhall-files
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'

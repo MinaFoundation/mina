@@ -1,0 +1,37 @@
+---
+name: Tier 1 jobs
+
+on:
+  push:
+    branches:
+      - 28-analyze-dhall-files
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  create-changed-files-list:
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 2
+      - uses: tj-actions/changed-files@v39
+        id: changed
+        with:
+          files_yaml: |
+            src:
+              - 'src/**'
+            rfcs:
+              - 'rfcs/**'
+            xref:
+              - '**/*.{md}'
+              - '.xrefcheck.yaml'
+          write_output_files: true
+
+      - name: Print yaml keys for the changed directories
+        run: |
+          echo ${{ steps.changed.outputs.modified_keys }}
