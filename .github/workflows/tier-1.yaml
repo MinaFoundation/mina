@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  create-changed-files-list:
+  changed-files:
+    name: "Check changed files"
     runs-on: minafoundation-toolchain-jammy-runners
     steps:
       - name: 📥 Checkout
@@ -29,10 +30,15 @@ jobs:
             xref:
               - '**/*.{md}'
               - '.xrefcheck.yaml'
+            validation:
+              - 'src/app/validation/**'
           write_output_files: true
-
-      - name: Print yaml keys for the changed directories
-        run: |
-          for key in ${{ steps.changed.outputs.modified_keys }}; do
-            echo "modified paths: $key";
-          done
+    outputs:
+      modified_keys: ${{ steps.changed.outputs.modified_keys }}
+  lints:
+    if: needs.changed-files.outputs.modified_keys != '[]' && needs.changed-files.outputs.modified_keys != ''
+    name: "Run lint related tasks"  
+    needs: changed-files
+    uses: ./.github/workflows/lint-tasks.yaml
+    with:
+      changed_paths: ${{ needs.changed-files.outputs.modified_keys }}
