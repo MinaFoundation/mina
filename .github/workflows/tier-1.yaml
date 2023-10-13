@@ -37,8 +37,8 @@ jobs:
       modified_keys: ${{ steps.changed.outputs.modified_keys }}
   lints:
     if: needs.changed-files.outputs.modified_keys != '[]' && needs.changed-files.outputs.modified_keys != ''
-    name: "Run lint related tasks"  
+    name: "Lints"
     needs: changed-files
-    uses: ./.github/workflows/lint-tasks.yaml
+    uses: ./.github/workflows/lint-tasks-workflow.yaml
     with:
       changed_paths: ${{ needs.changed-files.outputs.modified_keys }}
