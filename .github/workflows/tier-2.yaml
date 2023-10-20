@@ -1,0 +1,46 @@
+---
+name: Tier 2 jobs
+
+on:
+  push:
+    branches:
+      - 28-analyze-dhall-files
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  changed-files:
+    name: "Check changed files"
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: tj-actions/changed-files@v39
+        id: changed
+        with:
+          files_yaml: |
+            all:
+              - '**'
+            src:
+              - 'src/**'
+            rfcs:
+              - 'rfcs/**'
+            xref:
+              - '**/*.{md}'
+              - '.xrefcheck.yaml'
+            validation:
+              - 'src/app/validation/**'
+          write_output_files: true
+    outputs:
+      modified_keys: ${{ steps.changed.outputs.modified_keys }}
+  lints:
+    if: needs.changed-files.outputs.modified_keys != '[]' && needs.changed-files.outputs.modified_keys != ''
+    name: "Lints"
+    needs: changed-files
+    uses: ./.github/workflows/lint-tasks-workflow.yaml
+    with:
+      changed_paths: ${{ needs.changed-files.outputs.modified_keys }}
