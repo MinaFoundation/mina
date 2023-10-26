@@ -2,9 +2,7 @@
 name: Tier 1 jobs
 
 on:
-  push:
-    branches:
-      - 28-analyze-dhall-files
+  pull_request:
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'

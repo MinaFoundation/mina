@@ -4,7 +4,7 @@ name: Tier 2 jobs
 on:
   push:
     branches:
-      - 28-analyze-dhall-files
+      - 'mf-*'
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
