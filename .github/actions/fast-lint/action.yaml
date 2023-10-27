@@ -1,0 +1,18 @@
+# .github/actions/fast-lint/action.yaml
+---
+name: Fast lint checks
+description: Fast lint steps; CODEOWNERs, RFCs, Check Snarky Submodule, Preprocessor Deps
+inputs:
+  ref_name:
+    description: Branch that triggered the workflow run.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        ./scripts/lint_codeowners.sh
+        ./scripts/lint_rfcs.sh
+        make check-snarky-submodule
+        ./scripts/lint_preprocessor_deps.sh
+      shell: bash

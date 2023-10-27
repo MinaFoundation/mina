@@ -1,0 +1,56 @@
+---
+name: 1 - Pull Requests
+
+on:
+  pull_request:
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  changed-files:
+    name: Check changed files
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: tj-actions/changed-files@v39
+        id: changed
+        with:
+          files_yaml: |
+            src:
+              - 'src/**'
+            rfcs:
+              - 'rfcs/**'
+            xref:
+              - '**/*.{md}'
+              - '.xrefcheck.yaml'
+            validation:
+              - 'src/app/validation/**'
+          write_output_files: true
+    outputs:
+      modified_keys: ${{ steps.changed.outputs.modified_keys }}
+  lint:
+    if: needs.changed-files.outputs.modified_keys != '[]' && needs.changed-files.outputs.modified_keys != ''
+    name: Lint
+    needs: changed-files
+    uses: ./.github/workflows/lint-tasks-workflow.yaml
+    with:
+      changed_paths: ${{ needs.changed-files.outputs.modified_keys }}
+  release:
+    if: needs.changed-files.outputs.modified_keys != '[]' && needs.changed-files.outputs.modified_keys != ''
+    name: Release
+    needs: changed-files
+    uses: ./.github/workflows/release-tasks-workflow.yaml
+    with:
+      changed_paths: ${{ needs.changed-files.outputs.modified_keys }}
+  test:
+    if: needs.changed-files.outputs.modified_keys != '[]' && needs.changed-files.outputs.modified_keys != ''
+    name: Test
+    needs: changed-files
+    uses: ./.github/workflows/test-tasks-workflow.yaml
+    with:
+      changed_paths: ${{ needs.changed-files.outputs.modified_keys }}

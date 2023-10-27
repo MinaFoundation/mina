@@ -1,0 +1,13 @@
+on:
+  workflow_call:
+    inputs:
+      changed_paths:
+        description: 'Paths where changes took place'
+        required: true
+        type: string
+jobs:
+  test-job-placeholder:
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: Run a test task
+        run: echo "Run test jobs based on `${{ inputs.changed_paths }}` paths."

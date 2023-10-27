@@ -1,0 +1,109 @@
+on:
+  workflow_call:
+    inputs:
+      changed_paths:
+        description: 'Paths where changes took place'
+        required: true
+        type: string
+jobs:
+  ocaml-lint:
+    if: contains(inputs.changed_paths, 'src')
+    name: "OCaml Lints"
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: 🧩 Get opam dependency cache
+        uses: actions/cache@v3
+        id: opam_dependencies
+        with:
+          path: ~/.opam
+          key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
+      - name: 🏗️ Build opam dependencies
+        run: |
+          opam switch import opam.export --quiet
+          eval "$(opam config env)"
+          ./scripts/pin-external-packages.sh
+          opam clean --logs -cs --quiet
+      - name: 📝 OCaml Lints
+        uses: ./.github/actions/ocaml-lint
+  fast-lint:
+    if: contains(inputs.changed_paths, 'src') || contains(inputs.changed_paths, 'rfcs')
+    name: "Fast Lints"
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: 🧩 Get opam dependency cache
+        uses: actions/cache@v3
+        id: opam_dependencies
+        with:
+          path: ~/.opam
+          key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
+      - name: 🏗️ Build opam dependencies
+        run: |
+          opam switch import opam.export --quiet
+          eval $(opam config env) \
+          && ./scripts/pin-external-packages.sh \
+          && opam clean --logs -cs --quiet
+      - name: 📝 Fast Lints
+        uses: ./.github/actions/fast-lint
+        continue-on-error: true
+        with:
+          ref_name: ${{ github.ref_name }}
+  xrefcheck-lint:
+    if: contains(inputs.changed_paths, 'xref')
+    name: "Xrefcheck"
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: 📝 Xrefcheck
+        uses: serokell/xrefcheck-action@v1
+        with:
+          xrefcheck-version: 0.2
+  validation-service-lint:
+    if: contains(inputs.changed_paths, 'validation')
+    name: "Validation Service"
+    runs-on: minafoundation-toolchain-jammy-runners
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: 📝 Elixir version 
+        uses: ./.github/actions/validation-service
+        with:
+          commands: |
+            elixir --version | tail -n1 > mix_cache.sig
+      - name: 🧩 Get elixir mix cache
+        uses: actions/cache@v3
+        id: elixir_mix_cache
+        with:
+          path: src/app/validation
+          key: mina_elixir_mix-${{ hashFiles('./mix_cache.sig') }}
+      - name: 📝 Validation service
+        uses: ./.github/actions/validation-service
+        with:
+          commands: |
+            cd src/app/validation && mix local.hex --force && mix local.rebar --force && mix deps.get && mix check --force  xrefcheck-lint:
+  merge-lint:
+    name: "Merge"
+    runs-on: minafoundation-toolchain-jammy-runners
+    strategy:
+      matrix:
+        branch: [compatible, develop]
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: 📝 Check against ${{ matrix.branch }}
+        run: echo "placeholder buildkite/scripts/merges-cleanly.sh ${{ matrix.branch }}"

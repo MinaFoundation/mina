@@ -1,0 +1,17 @@
+# .github/actions/validation-service/action.yaml
+---
+name: Validation Service
+description: Validation service lint steps; employs various forms static analysis on the elixir codebase
+
+inputs:
+  commands:
+    required: true
+    description: 'Commands passed as args to elixir image(verbatim)'
+
+runs:
+  using: 'docker'
+  image: 'elixir:1.10-alpine'
+  entrypoint: sh
+  args:
+    - -c
+    - ${{ inputs.commands }}
