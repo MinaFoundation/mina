@@ -6,8 +6,23 @@ on:
         required: true
         type: string
 jobs:
-  release-job-placeholder:
+  build-deb-pkg:
+    name: "Build debian package"
     runs-on: minafoundation-toolchain-jammy-runners
     steps:
-      - name: Run a release task
-        run: echo "Run release jobs based on `${{ inputs.changed_paths }}` paths."
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: 🧩 Get libp2p_helper dependency cache
+        uses: actions/cache@v3
+        id: libp2p_helper_dependency
+        with:
+          path: ./src/app/libp2p_helper/result/bin/libp2p_helper
+          key: libp2p_helper_dependency-${{ hashFiles('src/app/libp2p_helper/src/go.sum') }}
+      - name: 🏗️ build libp2p_helper
+        if: ${{ steps.libp2p_helper_dependency.outputs.cache-hit != 'true' }}
+        run: make -C src/app/libp2p_helper
+      - name: list built files
+        run: ls -la src/app/libp2p_helper/result/bin/libp2p_helper
+

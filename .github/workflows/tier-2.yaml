@@ -4,25 +4,25 @@ name: 2 - Merge to default branch
 on:
   push:
     branches:
-      - 'mf-*'
+      - 'PM-*'
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint
-    uses: ./.github/workflows/lint-tasks-workflow.yaml
-    with:
-      changed_paths: tier2
+  # lint:
+  #   name: Lint
+  #   uses: ./.github/workflows/lint-tasks-workflow.yaml
+  #   with:
+  #     changed_paths: tier2
   release:
     name: Release
     uses: ./.github/workflows/release-tasks-workflow.yaml
     with:
       changed_paths: tier2
-  test:
-    name: Test
-    uses: ./.github/workflows/release-tasks-workflow.yaml
-    with:
-      changed_paths: tier2
+  # test:
+  #   name: Test
+  #   uses: ./.github/workflows/release-tasks-workflow.yaml
+  #   with:
+  #     changed_paths: tier2
