@@ -37,6 +37,7 @@ jobs:
           path: ~/.opam
           key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
       - name: 🏗️ Build opam dependencies
+        if: ${{ steps.opam_dependencies.outputs.cache-hit != 'true' }}
         run: |
           opam switch import opam.export --quiet
           eval "$(opam config env)"
@@ -47,6 +48,12 @@ jobs:
         run: make -C src/app/libp2p_helper
       - name: 🏗️ build mina components
         run: |
+          opam switch import opam.export --quiet
+          eval "$(opam config env)"
+          ./scripts/pin-external-packages.sh
+
+          export PATH=/home/runner/.cargo/bin:/usr/lib/go/bin:$PATH
+
           [[ ${{ inputs.dune_profile }} ]] && MAINNET_TARGETS="src/app/cli/src/mina_mainnet_signatures.exe src/app/rosetta/rosetta_mainnet_signatures.exe"
           echo "--- Build all major tagets required for packaging"
           echo "Building from Commit SHA: ${{ github.sha }}"
