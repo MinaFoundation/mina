@@ -16,7 +16,7 @@ on:
         type: boolean
         default: true
 env:
-  OPAMJOBS: 8
+  NIX_BUILD_CORES: 3
 jobs:
   build-deb-pkg:
     name: "Build debian package"
@@ -27,36 +27,36 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: 🧩 Get libp2p_helper dependency cache
-        uses: actions/cache@v3
-        id: libp2p_helper_dependency
-        with:
-          path: ./src/app/libp2p_helper/result/bin/libp2p_helper
-          key: libp2p_helper_dependency-${{ hashFiles('src/app/libp2p_helper/src/go.sum') }}
-      - name: 🧩 Get opam dependency cache
-        uses: actions/cache@v3
-        id: opam_dependencies
-        with:
-          path: ~/.opam
-          key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
-      - name: 🏗️ Build opam dependencies
-        if: ${{ steps.opam_dependencies.outputs.cache-hit != 'true' }}
-        run: |
-          opam switch import opam.export --quiet
-          eval "$(opam config env)"
-          ./scripts/pin-external-packages.sh
-          opam clean --logs -cs --quiet
-      - name: 🏗️ build libp2p_helper
-        if: ${{ steps.libp2p_helper_dependency.outputs.cache-hit != 'true' }}
-        run: make -C src/app/libp2p_helper
-      - name: 🏗️ build mina components
+      # - name: 🧩 Get libp2p_helper dependency cache
+      #   uses: actions/cache@v3
+      #   id: libp2p_helper_dependency
+      #   with:
+      #     path: ./src/app/libp2p_helper/result/bin/libp2p_helper
+      #     key: libp2p_helper_dependency-${{ hashFiles('src/app/libp2p_helper/src/go.sum') }}
+      # - name: 🧩 Get opam dependency cache
+      #   uses: actions/cache@v3
+      #   id: opam_dependencies
+      #   with:
+      #     path: ~/.opam
+      #     key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
+      # - name: 🏗️ Build opam dependencies
+      #   if: ${{ steps.opam_dependencies.outputs.cache-hit != 'true' }}
+      #   run: |
+      #     opam switch import opam.export --quiet
+      #     eval "$(opam config env)"
+      #     ./scripts/pin-external-packages.sh
+      #     opam clean --logs -cs --quiet
+      # - name: 🏗️ build libp2p_helper
+      #   if: ${{ steps.libp2p_helper_dependency.outputs.cache-hit != 'true' }}
+      #   run: make -C src/app/libp2p_helper
+      - name: 🏗️ build install nix
         uses: cachix/install-nix-action@v22
-      - name: 🏗️ Set up flake registry to get Mina with submodules
+      - name: 🏗️ Add Mina with submodules to flake registry
         run: ./nix/pin.sh
-      - name: 🏗️ build mina-deb
-        run: nix build --accept-flake-config mina#mina-deb
-      - name: ls checked out dir
-        run: ls -la ./
+      - name: 🏗️ Build mina-deb
+        run: nix build --max-jobs 4 --accept-flake-config mina#mina-deb
+      - name: Sleep for an hour to have time to inspect the result
+        run: sleep 3600
         
       
       # - name: 🏗️ build mina components
