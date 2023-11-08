@@ -22,56 +22,56 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          #fetch-depth: 0
-      - name: 🧩 Get libp2p_helper dependency cache
-        uses: actions/cache@v3
-        id: libp2p_helper_dependency
-        with:
-          path: ./src/app/libp2p_helper/result/bin/libp2p_helper
-          key: libp2p_helper_dependency-${{ hashFiles('src/app/libp2p_helper/src/go.sum') }}
-      - name: 🧩 Get opam dependency cache
-        uses: actions/cache@v3
-        id: opam_dependencies
-        with:
-          path: ~/.opam
-          key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
-      - name: 🏗️ Build opam dependencies
-        if: ${{ steps.opam_dependencies.outputs.cache-hit != 'true' }}
-        run: |
-          opam switch import opam.export --quiet
-          eval "$(opam config env)"
-          ./scripts/pin-external-packages.sh
-          opam clean --logs -cs --quiet
-      - name: 🏗️ build libp2p_helper
-        if: ${{ steps.libp2p_helper_dependency.outputs.cache-hit != 'true' }}
-        run: make -C src/app/libp2p_helper
-      # - name: 🏗️ build install nix
-      #   uses: cachix/install-nix-action@v22
-      # - name: 🏗️ Add Mina with submodules to flake registry
-      #   run: ./nix/pin.sh
-      # - name: 🏗️ Build mina-deb
-      #   run: nix build --max-jobs 4 --accept-flake-config mina#mina-deb
-      # - name: Sleep for an hour to have time to inspect the result
-      #   run: sleep 3600
+          fetch-depth: 0
+      # - name: 🧩 Get libp2p_helper dependency cache
+      #   uses: actions/cache@v3
+      #   id: libp2p_helper_dependency
+      #   with:
+      #     path: ./src/app/libp2p_helper/result/bin/libp2p_helper
+      #     key: libp2p_helper_dependency-${{ hashFiles('src/app/libp2p_helper/src/go.sum') }}
+      # - name: 🧩 Get opam dependency cache
+      #   uses: actions/cache@v3
+      #   id: opam_dependencies
+      #   with:
+      #     path: ~/.opam
+      #     key: mina_opam_dependencies-${{ hashFiles('./opam.export') }}
+      # - name: 🏗️ Build opam dependencies
+      #   if: ${{ steps.opam_dependencies.outputs.cache-hit != 'true' }}
+      #   run: |
+      #     opam switch import opam.export --quiet
+      #     eval "$(opam config env)"
+      #     ./scripts/pin-external-packages.sh
+      #     opam clean --logs -cs --quiet
+      # - name: 🏗️ build libp2p_helper
+      #   if: ${{ steps.libp2p_helper_dependency.outputs.cache-hit != 'true' }}
+      #   run: make -C src/app/libp2p_helper
+      - name: 🏗️ build install nix
+        uses: cachix/install-nix-action@v22
+      - name: 🏗️ Add Mina with submodules to flake registry
+        run: ./nix/pin.sh
+      - name: 🏗️ Build mina-image
+        run: nix build --max-jobs 4 --accept-flake-config mina#packages.x86_64-linux.mina-image-slim
+      - name: Sleep for an hour to have time to inspect the result
+        run: sleep 3600
         
-      - name: 🏗️ build mina components
-        run: |
-          PATH="$PATH:/usr/lib/go/bin:$HOME/.cargo/bin"
-          eval "$(opam config env)"
-          [[ ${{ inputs.dune_profile }} ]] && MAINNET_TARGETS="src/app/cli/src/mina_mainnet_signatures.exe src/app/rosetta/rosetta_mainnet_signatures.exe"
-          echo "--- Build all major tagets required for packaging"
-          echo "Building from Commit SHA: ${{ github.sha }}"
-          echo "Rust Version: $(rustc --version)"
-          dune build "--profile=${{ inputs.dune_profile }}" \
-          src/app/cli/src/mina_testnet_signatures.exe \
-          src/app/cli/src/mina_mainnet_signatures.exe \
-          src/app/archive/archive.exe \
-          src/app/archive_blocks/archive_blocks.exe \
-          src/app/extract_blocks/extract_blocks.exe \
-          src/app/missing_blocks_auditor/missing_blocks_auditor.exe \
-          src/app/replayer/replayer.exe \
-          src/app/rosetta/rosetta_testnet_signatures.exe \
-          src/app/rosetta/rosetta_mainnet_signatures.exe \
-          src/app/generate_keypair/generate_keypair.exe \
-          src/app/validate_keypair/validate_keypair.exe \
-          src/app/rosetta/ocaml-signer/signer.exe
+      # - name: 🏗️ build mina components
+      #   run: |
+      #     PATH="$PATH:/usr/lib/go/bin:$HOME/.cargo/bin"
+      #     eval "$(opam config env)"
+      #     [[ ${{ inputs.dune_profile }} ]] && MAINNET_TARGETS="src/app/cli/src/mina_mainnet_signatures.exe src/app/rosetta/rosetta_mainnet_signatures.exe"
+      #     echo "--- Build all major tagets required for packaging"
+      #     echo "Building from Commit SHA: ${{ github.sha }}"
+      #     echo "Rust Version: $(rustc --version)"
+      #     dune build "--profile=${{ inputs.dune_profile }}" \
+      #     src/app/cli/src/mina_testnet_signatures.exe \
+      #     src/app/cli/src/mina_mainnet_signatures.exe \
+      #     src/app/archive/archive.exe \
+      #     src/app/archive_blocks/archive_blocks.exe \
+      #     src/app/extract_blocks/extract_blocks.exe \
+      #     src/app/missing_blocks_auditor/missing_blocks_auditor.exe \
+      #     src/app/replayer/replayer.exe \
+      #     src/app/rosetta/rosetta_testnet_signatures.exe \
+      #     src/app/rosetta/rosetta_mainnet_signatures.exe \
+      #     src/app/generate_keypair/generate_keypair.exe \
+      #     src/app/validate_keypair/validate_keypair.exe \
+      #     src/app/rosetta/ocaml-signer/signer.exe
