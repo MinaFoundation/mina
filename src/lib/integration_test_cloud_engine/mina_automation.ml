@@ -113,10 +113,10 @@ module Network_config = struct
     let { requires_graphql
         ; genesis_ledger
         ; epoch_data
+        ; archive_nodes
         ; block_producers
         ; snark_coordinator
         ; snark_worker_fee
-        ; num_archive_nodes
         ; log_precomputed_blocks (* ; num_plain_nodes *)
         ; proof_config
         ; Test_config.k
@@ -124,6 +124,7 @@ module Network_config = struct
         ; slots_per_epoch
         ; slots_per_sub_window
         ; txpool_max_size
+        ; _
         } =
       test_config
     in
@@ -178,7 +179,7 @@ module Network_config = struct
     let add_accounts accounts_and_keypairs =
       List.map accounts_and_keypairs
         ~f:(fun
-             ( { Test_config.Test_Account.balance; account_name; timing }
+             ( { Test_config.Test_Account.balance; account_name; timing; _ }
              , (pk, sk) )
            ->
           let timing = runtime_timing_of_timing timing in
@@ -266,7 +267,7 @@ module Network_config = struct
                   (epoch_accounts : Test_config.Test_Account.t list) =
                 let epoch_ledger_accounts =
                   List.map epoch_accounts
-                    ~f:(fun { account_name; balance; timing } ->
+                    ~f:(fun { account_name; balance; timing; _ } ->
                       let balance = Balance.of_mina_string_exn balance in
                       let timing = runtime_timing_of_timing timing in
                       let genesis_account =
@@ -442,7 +443,7 @@ module Network_config = struct
         ; runtime_config = Runtime_config.to_yojson runtime_config
         ; block_producer_configs
         ; log_precomputed_blocks
-        ; archive_node_count = num_archive_nodes
+        ; archive_node_count = List.length archive_nodes
         ; mina_archive_schema
         ; mina_archive_schema_aux_files
         ; snark_coordinator_config

@@ -449,4 +449,50 @@ module Make (Inputs : Intf.Test.Inputs_intf) = struct
       ; vesting_period = Mina_numbers.Global_slot_span.of_int vesting_period
       ; vesting_increment = Amount.of_nanomina_int_exn vesting_increment
       }
+
+  module Node_config = struct
+    open Inputs.Engine.Network
+
+    let archive node_name ?(account_name = node_name ^ "-key")
+        ?(docker_image = !archive_image) ?git_build () =
+      let docker_image =
+        if Option.is_some git_build then None else docker_image
+      in
+      { Test_config.Archive_node.node_name
+      ; account_name
+      ; docker_image
+      ; git_build
+      }
+
+    let bp node_name ?(account_name = node_name ^ "-key")
+        ?(docker_image = !mina_image) ?git_build () =
+      let docker_image =
+        if Option.is_some git_build then None else Some docker_image
+      in
+      { Test_config.Block_producer_node.node_name
+      ; account_name
+      ; docker_image
+      ; git_build
+      }
+
+    let seed node_name ?(account_name = node_name ^ "-key")
+        ?(docker_image = !mina_image) ?git_build () =
+      let docker_image =
+        if Option.is_some git_build then None else Some docker_image
+      in
+      { Test_config.Seed_node.node_name; account_name; docker_image; git_build }
+
+    let snark node_name ?(account_name = node_name ^ "-key")
+        ?(docker_image = !mina_image) ?git_build worker_nodes =
+      let docker_image =
+        if Option.is_some git_build then None else Some docker_image
+      in
+      Some
+        { Test_config.Snark_coordinator_node.node_name
+        ; account_name
+        ; docker_image
+        ; git_build
+        ; worker_nodes
+        }
+  end
 end
