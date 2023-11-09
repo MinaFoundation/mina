@@ -93,7 +93,7 @@ ROSETTA_CLI_CONFIG_FILES=${ROSETTA_CLI_CONFIG_FILES:="config.json mina.ros"}
 ROSETTA_CLI_MAIN_CONFIG_FILE=${ROSETTA_CLI_MAIN_CONFIG_FILE:="config.json"}
 
 # Frequency (in seconds) at which payment operations will be sent
-TRANSACTION_FREQUENCY=60
+TRANSACTION_FREQUENCY=10
 
 # Fetch zkApps
 curl -Ls https://github.com/MinaProtocol/rosetta-integration-test-zkapps/tarball/$ROSETTA_INT_TEST_ZKAPPS_VERSION | tar xz -C /tmp
@@ -122,8 +122,8 @@ cat <<EOF >"$MINA_CONFIG_FILE"
   "ledger": {
     "name": "${MINA_NETWORK}",
     "accounts": [
-      { "pk": "${BLOCK_PRODUCER_PK}", "balance": "1000", "delegate": null, "sk": null },
-      { "pk": "${SNARK_PRODUCER_PK}", "balance": "2000", "delegate": "${BLOCK_PRODUCER_PK}", "sk": null }
+      { "pk": "${BLOCK_PRODUCER_PK}", "balance": "1000000", "delegate": null, "sk": null },
+      { "pk": "${SNARK_PRODUCER_PK}", "balance": "2000000", "delegate": "${BLOCK_PRODUCER_PK}", "sk": null }
     ]
   }
 }
@@ -152,6 +152,7 @@ for config_file in $ROSETTA_CLI_CONFIG_FILES; do
     -e "s/PLACEHOLDER_PREFUNDED_ADDRESS/${BLOCK_PRODUCER_PK}/" \
     -e "s/PLACEHOLDER_ROSETTA_OFFLINE_PORT/${MINA_ROSETTA_OFFLINE_PORT}/" \
     -e "s/PLACEHOLDER_ROSETTA_ONLINE_PORT/${MINA_ROSETTA_ONLINE_PORT}/" \
+    -e "s/PLACEHOLDER_NETWORK_NAME/${MINA_NETWORK}/" \
     "$ROSETTA_CONFIGURATION_INPUT_DIR/$config_file" >"$ROSETTA_CONFIGURATION_OUTPUT_DIR/$config_file"
 done
 
