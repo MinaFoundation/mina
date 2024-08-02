@@ -1,0 +1,25 @@
+ARG deb_codename=focal
+ARG base_image_version=3.0.0-93e0279
+ARG base_image_tag=${base_image_version}-${deb_codename}
+
+FROM gcr.io/o1labs-192920/mina-toolchain@sha256:966863de43c72c294e14762ae567404005f99654c54338a9a89b999476a36d1f AS builder
+
+COPY --chown=opam:opam dune dune-project /src/mina/
+COPY --chown=opam:opam src /src/mina/src
+
+WORKDIR /src/mina
+
+SHELL [ "/bin/bash", "-c" ]
+
+ARG build_mainnet=1
+
+RUN source ~/.profile && \
+    if [[ -n "${build_mainnet}" ]]; then DUNE_PROFILE=mainnet; TARGET=src/app/rosetta/rosetta_mainnet_signatures.exe; \ 
+    else DUNE_PROFILE=devnet; TARGET=src/app/rosetta/rosetta_testnet_signatures.exe; \
+    fi && \
+    dune build --profile=${DUNE_PROFILE} ${TARGET} && \
+    cp _build/default/${TARGET} /src/mina/_build/default/src/app/rosetta/rosetta.exe
+
+FROM minaprotocol/mina-rosetta:${base_image_tag} AS production
+
+COPY --from=builder /src/mina/_build/default/src/app/rosetta/rosetta.exe /usr/local/bin/mina-rosetta
